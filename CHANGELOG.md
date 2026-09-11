@@ -1,6 +1,6 @@
 # Changelog
 
-## [269.3.1] - 2026-09-03
+## [269.11.0] - 2026-09-03
 
 ### Ecosystem & Rebranding
 - Rebranded official suite to **CelSuite - Scrcpy Heartbeat** (`HenryJayZ.CelSuite.ScrcpyHeartbeat`)

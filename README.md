@@ -31,7 +31,7 @@
 
 All desktop executables and mobile packages are built automatically in the cloud via GitHub Actions.
 
-👉 **[Download the Latest Release (v269.3.1)](https://github.com/HenryCarm/CelSuite_Scrcpy-Heartbeat/releases/latest)**
+👉 **[Download the Latest Release (v269.11.0)](https://github.com/HenryCarm/CelSuite_Scrcpy-Heartbeat/releases/latest)**
 
 | Platform | Download Asset | Type | Description |
 | :--- | :--- | :--- | :--- |
