@@ -4,10 +4,11 @@ package.name = scrcpyheartbeat
 package.domain = henryjayz.celsuite
 source.dir = android
 source.include_exts = py,png,jpg,kv,atlas,jpeg
-version = 269.3.1
-android.numeric_version = 2690301
+version = 269.11.0
+android.numeric_version = 269.11.0
 requirements = python3,kivy==2.2.1,pyjnius
 orientation = portrait
+fullscreen = 0
 osx.python_version = 3
 osx.kivy_version = 1.11.1
 android.archs = arm64-v8a

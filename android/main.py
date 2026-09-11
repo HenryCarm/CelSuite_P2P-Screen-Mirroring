@@ -934,10 +934,13 @@ class FileTransferScreen(Screen):
             self.sender_spinner.values = []
 
     def start_file_send_to_pc(self, instance):
-        filename = self.sender_spinner.text
-        if filename == "Select file from Vault..." or not filename:
+        selection = getattr(self, 'file_chooser', None)
+        if not selection or not selection.selection:
             self.send_progress_lbl.text = "Please select a file first!"
             return
+            
+        filepath = selection.selection[0]
+        filename = os.path.basename(filepath)
             
         main_screen = self.manager.get_screen('main')
         pc_ip = main_screen.discovered_pc_ip
@@ -949,7 +952,6 @@ class FileTransferScreen(Screen):
         self.send_progress_lbl.text = "Connecting to PC File server..."
         
         def _task():
-            filepath = os.path.join(VAULT_DIR, filename)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(10.0)
             try:
@@ -1221,7 +1223,7 @@ class HelpScreen(Screen):
         content.bind(minimum_height=content.setter('height'))
         
         guide_text = (
-            "[b]CelSuite - Scrcpy Heartbeat v269.3.1[/b]\n\n"
+            "[b]CelSuite - Scrcpy Heartbeat v269.11.0[/b]\n\n"
             "[b]Quick Launch Instructions:[/b]\n"
             "1. Link phone and PC to the same WiFi/hotspot.\n"
             "2. Open the PC PySide6 CelSuite client, then open this app on your phone.\n"
