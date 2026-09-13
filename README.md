@@ -2,9 +2,9 @@
 
 <img src="icon.webp" alt="CelSuite Logo" width="130" height="130" />
 
-# CelSuite — Scrcpy Heartbeat
+# CelSuite P2P Screen Mirroring
 
-**Seamless, zero-friction wireless Android mirroring, hardware telemetry, bi-directional clipboard sync & high-speed file transfers.**
+**Bidirectional Zero-Lag Screen Mirroring: Phone ↔ PC, Multitouch Digitizer, Audio Loopback & Virtual Macros.**
 
 [![Release](https://img.shields.io/github/v/release/HenryCarm/CelSuite_Scrcpy-Heartbeat?style=for-the-badge&color=2ecc71)](https://github.com/HenryCarm/CelSuite_Scrcpy-Heartbeat/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)](#-downloads--releases)
@@ -23,7 +23,9 @@
 
 ## 🌟 Overview
 
-**CelSuite - Scrcpy Heartbeat** eliminates the hassle of cables, manual IP typing, and failed connections when using [scrcpy](https://github.com/Genymobile/scrcpy). Simply unlock your phone, tap the Quick Settings tile or let the automated UDP heartbeat link your device, and enjoy low-latency wireless screen mirroring, real-time hardware vitals, and one-tap clipboard sharing.
+**CelSuite P2P Screen Mirroring** is a complete bidirectional display and control ecosystem:
+- **Phone → PC (Scrcpy Engine):** Ultra-fast wireless Android screen mirroring, hardware telemetry dashboard, bi-directional clipboard sync & high-speed file transfers.
+- **PC → Phone (Reverse Mirror):** Low-latency (<30ms) GPU-accelerated desktop streaming, full multi-touch digitizer injection on Windows & Linux, floating quick-switch controls, modular virtual keyboard/macro pads, and low-latency audio streaming.
 
 ---
 
