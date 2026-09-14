@@ -12,7 +12,7 @@ import sys
 
 # ── Application Metadata ──────────────────────────────────────────────────────
 APP_NAME = "CelSuite - Scrcpy Heartbeat"
-APP_VERSION = "269.11.0"
+APP_VERSION = "269.14.0"
 APP_AUTHOR = "Henry"
 APP_DOMAIN = "HenryJayZ.CelSuite"
 

@@ -775,6 +775,11 @@ class MainScreen(Screen):
             self.sending = True
             threading.Thread(target=self.heartbeat_loop, args=(pc_ip,), daemon=True).start()
 
+    def stop_heartbeat(self):
+        self.sending = False
+        self.pulse.set_state(False)
+        self.status_label.text = "Mirroring suspended (Quick Panel OFF)"
+
     def _get_phone_ip(self, target_ip):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1397,10 +1402,7 @@ class HeartbeatApp(App):
                     self.send_local_clipboard_to_pc()
                 elif action in ("henryjayz.celsuite.scrcpyheartbeat.TOGGLE_HEARTBEAT", "org.henry.scrcpy.TOGGLE_HEARTBEAT"):
                     active = intent.getBooleanExtra("active", True)
-                    if active and not self.heartbeat_running:
-                        self.toggle_heartbeat(None)
-                    elif not active and self.heartbeat_running:
-                        self.toggle_heartbeat(None)
+                    self.handle_tile_toggle(active)
             
             receiver = BroadcastReceiver(
                 on_clipboard_intent,
@@ -1430,7 +1432,8 @@ class HeartbeatApp(App):
                         target_path = arg.split("=", 1)[1]
                 Window.screenshot(name=target_path)
                 app_log(f"Auto screenshot saved to {target_path}")
-                Clock.schedule_once(lambda d: App.get_running_app().stop(), 1)
+                import os
+                os._exit(0)
 
             app_log("Auto-screenshot mode active: capturing in 2 seconds...")
             Clock.schedule_once(capture_and_quit, 2)
@@ -1475,6 +1478,29 @@ class HeartbeatApp(App):
                         sock.close()
         except Exception as e:
             app_log(f"Failed to fetch device clipboard: {e}")
+
+    def handle_tile_toggle(self, active):
+        import gc
+        app_log(f"Quick Settings Tile toggle received: active={active}")
+        main_screen = self.root_sm.get_screen("main") if hasattr(self, "root_sm") and self.root_sm.has_screen("main") else None
+        if not main_screen:
+            return
+        if active:
+            main_screen.scan_network(None)
+        else:
+            if hasattr(main_screen, "stop_heartbeat"):
+                main_screen.stop_heartbeat()
+            gc.collect()
+            app_log("Heartbeat stopped and RAM released via Quick Settings Tile.")
+
+    def on_pause(self):
+        import gc
+        gc.collect()
+        return True
+
+    def on_stop(self):
+        import gc
+        gc.collect()
 
 if __name__ == "__main__":
     try:

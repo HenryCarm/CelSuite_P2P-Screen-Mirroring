@@ -13,9 +13,9 @@ from pathlib import Path
 
 TILE_SERVICE_XML = """
         <!-- Quick Settings Tile for Scrcpy Heartbeat -->
-        <service android:name=".ScrcpyTileService"
+        <service android:name="henryjayz.celsuite.scrcpyheartbeat.ScrcpyTileService"
                  android:label="Scrcpy Heartbeat"
-                 android:icon="@mipmap/icon"
+                 android:icon="@mipmap/ic_launcher"
                  android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
                  android:exported="true">
             <intent-filter>
