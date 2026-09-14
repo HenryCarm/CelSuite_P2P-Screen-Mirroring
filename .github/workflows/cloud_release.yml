@@ -65,7 +65,11 @@ jobs:
 
       - name: Build APK with Buildozer
         run: |
-          buildozer android debug
+          buildozer android debug || {
+            echo "Initial buildozer run encountered network/socket reset, retrying in 5 seconds..."
+            sleep 5
+            buildozer android debug
+          }
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
