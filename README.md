@@ -2,11 +2,11 @@
 
 <img src="icon.webp" alt="CelSuite Logo" width="130" height="130" />
 
-# CelSuite — Scrcpy Heartbeat
+# CelSuite — P2P Screen Mirroring
 
 **Seamless, zero-friction wireless Android mirroring, hardware telemetry, bi-directional clipboard sync & high-speed file transfers.**
 
-[![Release](https://img.shields.io/github/v/release/HenryCarm/CelSuite_Scrcpy-Heartbeat?style=for-the-badge&color=2ecc71)](https://github.com/HenryCarm/CelSuite_Scrcpy-Heartbeat/releases/latest)
+[![Release](https://img.shields.io/github/v/release/HenryCarm/CelSuite_P2P-Screen-Mirroring?style=for-the-badge&color=2ecc71)](https://github.com/HenryCarm/CelSuite_P2P-Screen-Mirroring/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge)](#-downloads--releases)
 [![GUI](https://img.shields.io/badge/GUI-PySide6%20LGPL-success?style=for-the-badge)](https://www.qt.io/qt-for-python)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
@@ -23,7 +23,7 @@
 
 ## 🌟 Overview
 
-**CelSuite - Scrcpy Heartbeat** eliminates the hassle of cables, manual IP typing, and failed connections when using [scrcpy](https://github.com/Genymobile/scrcpy). Simply unlock your phone, tap the Quick Settings tile or let the automated UDP heartbeat link your device, and enjoy low-latency wireless screen mirroring, real-time hardware vitals, and one-tap clipboard sharing.
+**CelSuite — P2P Screen Mirroring** eliminates the hassle of cables, manual IP typing, and failed connections when using [scrcpy](https://github.com/Genymobile/scrcpy). Simply unlock your phone, tap the Quick Settings tile or let the automated UDP heartbeat link your device, and enjoy low-latency wireless screen mirroring, real-time hardware vitals, and one-tap clipboard sharing.
 
 ---
 
@@ -31,7 +31,7 @@
 
 All desktop executables and mobile packages are built automatically in the cloud via GitHub Actions.
 
-👉 **[Download the Latest Release (v269.3.1)](https://github.com/HenryCarm/CelSuite_Scrcpy-Heartbeat/releases/latest)**
+👉 **[Download the Latest Release (v269.14.0)](https://github.com/HenryCarm/CelSuite_P2P-Screen-Mirroring/releases/latest)**
 
 | Platform | Download Asset | Type | Description |
 | :--- | :--- | :--- | :--- |
