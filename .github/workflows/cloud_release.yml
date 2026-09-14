@@ -17,9 +17,9 @@ on:
           - 'linux-only'
           - 'android-only'
       tag_name:
-        description: 'Release Tag (e.g. v269.11.0)'
+        description: 'Release Tag (e.g. v269.14.0)'
         required: true
-        default: 'v269.11.0'
+        default: 'v269.14.0'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true

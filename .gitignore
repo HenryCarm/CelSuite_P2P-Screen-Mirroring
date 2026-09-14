@@ -73,3 +73,6 @@ icon.png
 !icon.webp
 !banner.webp
 !banner_green.webp
+
+# Agent workspace directories
+.agents/
