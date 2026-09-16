@@ -195,16 +195,16 @@ class HeartbeatListener(QObject):
                 data, addr = self._sock.recvfrom(1024)
                 message = data.decode("utf-8", errors="ignore").strip()
 
-                if PROTO_HEARTBEAT_PREFIX in message:
+                if message.startswith(PROTO_CLIPBOARD_PREFIX):
+                    try:
+                        parts = message.split("|", 1)
+                        clip_text = parts[1] if len(parts) > 1 else ""
+                        self.clipboard_received.emit(clip_text)
+                    except Exception as e:
+                        log.debug("Clipboard parse error: %s", e)
+                elif message.startswith(PROTO_HEARTBEAT_PREFIX):
                     phone_ip, adb_port = self._parse_heartbeat(message, addr[0])
                     self._handle_heartbeat(phone_ip, adb_port)
-                elif PROTO_CLIPBOARD_PREFIX in message:
-                    try:
-                        _, b64_text = message.split("|", 1)
-                        # Wait, the android app sends f"HELLO_CLIPBOARD|{text}"
-                        self.clipboard_received.emit(b64_text)
-                    except ValueError:
-                        pass
 
             except socket.timeout:
                 continue
@@ -234,6 +234,9 @@ class HeartbeatListener(QObject):
         parts = message.split("|")
         if len(parts) >= 3:
             phone_ip = parts[1].strip()
+            # Guard against loopback or dummy IPs sent by tile services
+            if phone_ip in ("127.0.0.1", "localhost", "0.0.0.0"):
+                phone_ip = sender_ip
             try:
                 adb_port = int(parts[2].strip())
             except ValueError:

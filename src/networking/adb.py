@@ -595,6 +595,9 @@ def launch_scrcpy(
     cmd = [
         scrcpy_bin,
         "--audio-source=playback",
+        "--audio-buffer=50",
+        "--audio-output-buffer=50",
+        "--no-key-repeat",
         "-s", f"{phone_ip}:{adb_port}",
     ]
     if extra_args:
@@ -608,6 +611,20 @@ def launch_scrcpy(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                 **_SUBPROCESS_FLAGS,
             )
+            # CRITICAL FIX: Continuously drain stderr in a background daemon thread
+            # so the OS kernel pipe buffer (64KB) NEVER fills up and causes scrcpy to freeze!
+            def _drain_stderr(proc: subprocess.Popen) -> None:
+                try:
+                    if proc.stderr:
+                        for raw_line in iter(proc.stderr.readline, b""):
+                            line = raw_line.decode("utf-8", errors="ignore").strip()
+                            if line:
+                                log.debug("[scrcpy stderr] %s", line)
+                except Exception:
+                    pass
+
+            threading.Thread(target=_drain_stderr, args=(_scrcpy_process,), daemon=True).start()
+
             return True, f"scrcpy launched (PID {_scrcpy_process.pid})"
         except FileNotFoundError:
             return False, f"scrcpy binary not found: {scrcpy_bin}"
@@ -671,3 +688,203 @@ def monitor_scrcpy(
                     on_restart()
                 else:
                     launch_scrcpy(config, phone_ip, adb_port)
+
+
+# ── Phone File Explorer ADB Helpers ───────────────────────────────────────────
+
+def list_phone_dir(
+    config: AppConfig,
+    remote_path: str,
+    phone_ip: Optional[str] = None,
+    adb_port: int = DEFAULT_ADB_PORT,
+) -> list[dict]:
+    """
+    List files and directories at `remote_path` on the Android device via ADB.
+    Returns list of dicts: {"name": str, "is_dir": bool, "size": int, "date": str}
+    """
+    if not phone_ip:
+        phone_ip, port = get_connected_phone(config)
+        if port:
+            adb_port = port
+    if not phone_ip:
+        return []
+
+    adb = find_adb_binary(config)
+    target = f"{phone_ip}:{adb_port}"
+
+    # Use toybox ls -l or ls -la with -F or directory test
+    cmd = [
+        adb, "-s", target, "shell",
+        f"ls -l -a '{remote_path}' 2>/dev/null || ls -l '{remote_path}'"
+    ]
+
+    items: list[dict] = []
+    try:
+        res = _run(cmd, capture_output=True, text=True, timeout=8)
+        if res.returncode != 0 and not res.stdout:
+            return []
+
+        for line in res.stdout.splitlines():
+            line = line.strip()
+            if not line or line.startswith("total "):
+                continue
+
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+
+            perms = parts[0]
+            is_dir = perms.startswith("d") or perms.startswith("l")
+
+            # Try to locate size and filename
+            # Standard toybox ls -l format:
+            # drwxrwx---  3 root  everybody  4096 2026-09-14 12:00 Download
+            try:
+                # Find the date index (YYYY-MM-DD or Month Day)
+                date_str = ""
+                name = ""
+                # Filename is the last token or tokens joined by space
+                # Look for token with '-' (e.g. 2026-09-14) or ':' (e.g. 12:00)
+                size = 0
+                for i, p in enumerate(parts):
+                    if p.isdigit() and int(p) > 0 and i >= 3:
+                        size = int(p)
+                    if "-" in p and len(p) == 10 and p[:4].isdigit():
+                        # Found date like 2026-09-14
+                        time_part = parts[i + 1] if i + 1 < len(parts) else ""
+                        date_str = f"{p} {time_part}".strip()
+                        name = " ".join(parts[i + 2:])
+                        break
+
+                if not name:
+                    # Fallback
+                    name = parts[-1]
+
+                # Filter out current and parent directory dots
+                if name in (".", ".."):
+                    continue
+
+                # Strip symlink targets if any (e.g., "self -> /storage/emulated/0")
+                if " -> " in name:
+                    name = name.split(" -> ")[0].strip()
+
+                items.append({
+                    "name": name,
+                    "is_dir": is_dir,
+                    "size": size,
+                    "date": date_str,
+                })
+            except Exception:
+                continue
+
+    except Exception as exc:
+        log.error("Failed to list remote directory %s: %s", remote_path, exc)
+
+    return items
+
+
+def pull_from_phone(
+    config: AppConfig,
+    remote_path: str,
+    local_dest: str,
+    phone_ip: Optional[str] = None,
+    adb_port: int = DEFAULT_ADB_PORT,
+) -> tuple[bool, str]:
+    """Pull a file or intact directory tree from Android to PC."""
+    if not phone_ip:
+        phone_ip, _ = get_connected_phone(config)
+    if not phone_ip:
+        return False, "No phone connected"
+
+    adb = find_adb_binary(config)
+    target = f"{phone_ip}:{adb_port}"
+
+    try:
+        res = _run(
+            [adb, "-s", target, "pull", remote_path, local_dest],
+            capture_output=True, text=True, timeout=300,
+        )
+        if res.returncode == 0:
+            return True, f"Pulled to {local_dest}"
+        return False, res.stderr or res.stdout
+    except Exception as exc:
+        return False, str(exc)
+
+
+def push_to_phone(
+    config: AppConfig,
+    local_path: str,
+    remote_dest: str,
+    phone_ip: Optional[str] = None,
+    adb_port: int = DEFAULT_ADB_PORT,
+) -> tuple[bool, str]:
+    """Push a file or directory tree from PC to Android."""
+    if not phone_ip:
+        phone_ip, _ = get_connected_phone(config)
+    if not phone_ip:
+        return False, "No phone connected"
+
+    adb = find_adb_binary(config)
+    target = f"{phone_ip}:{adb_port}"
+
+    try:
+        res = _run(
+            [adb, "-s", target, "push", local_path, remote_dest],
+            capture_output=True, text=True, timeout=300,
+        )
+        if res.returncode == 0:
+            return True, f"Pushed to {remote_dest}"
+        return False, res.stderr or res.stdout
+    except Exception as exc:
+        return False, str(exc)
+
+
+def mkdir_on_phone(
+    config: AppConfig,
+    remote_path: str,
+    phone_ip: Optional[str] = None,
+    adb_port: int = DEFAULT_ADB_PORT,
+) -> tuple[bool, str]:
+    """Create a directory on phone via ADB."""
+    if not phone_ip:
+        phone_ip, _ = get_connected_phone(config)
+    if not phone_ip:
+        return False, "No phone connected"
+
+    adb = find_adb_binary(config)
+    target = f"{phone_ip}:{adb_port}"
+
+    try:
+        res = _run(
+            [adb, "-s", target, "shell", "mkdir", "-p", remote_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        return res.returncode == 0, res.stdout or res.stderr
+    except Exception as exc:
+        return False, str(exc)
+
+
+def delete_on_phone(
+    config: AppConfig,
+    remote_path: str,
+    phone_ip: Optional[str] = None,
+    adb_port: int = DEFAULT_ADB_PORT,
+) -> tuple[bool, str]:
+    """Delete a file or directory on phone via ADB."""
+    if not phone_ip:
+        phone_ip, _ = get_connected_phone(config)
+    if not phone_ip:
+        return False, "No phone connected"
+
+    adb = find_adb_binary(config)
+    target = f"{phone_ip}:{adb_port}"
+
+    try:
+        res = _run(
+            [adb, "-s", target, "shell", "rm", "-rf", remote_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        return res.returncode == 0, res.stdout or res.stderr
+    except Exception as exc:
+        return False, str(exc)
+

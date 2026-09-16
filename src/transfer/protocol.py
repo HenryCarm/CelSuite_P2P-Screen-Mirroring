@@ -25,10 +25,20 @@ from src.constants import (
 # ── Message Builders ──────────────────────────────────────────────────────────
 
 
+PROTO_FOLDER_SEND = "FOLDER_SEND"
+
+
 def build_send_header(filename: str, filesize: int) -> bytes:
     """Build a ``FILE_SEND|filename|filesize`` header."""
     safe_name = sanitize_filename(filename)
     header = f"{PROTO_FILE_SEND}{PROTO_SEPARATOR}{safe_name}{PROTO_SEPARATOR}{filesize}\n"
+    return header.encode("utf-8")
+
+
+def build_folder_send_header(foldername: str, filesize: int) -> bytes:
+    """Build a ``FOLDER_SEND|foldername|filesize`` header."""
+    safe_name = sanitize_filename(foldername)
+    header = f"{PROTO_FOLDER_SEND}{PROTO_SEPARATOR}{safe_name}{PROTO_SEPARATOR}{filesize}\n"
     return header.encode("utf-8")
 
 
@@ -87,6 +97,25 @@ def parse_send_header(raw: str) -> tuple[Optional[str], Optional[int]]:
         if filesize < 0:
             return None, None
         return filename, filesize
+    except ValueError:
+        return None, None
+
+
+def parse_folder_send_header(raw: str) -> tuple[Optional[str], Optional[int]]:
+    """
+    Parse a FOLDER_SEND header.
+
+    Returns ``(foldername, filesize)`` or ``(None, None)`` on invalid input.
+    """
+    command, args = parse_header(raw)
+    if command != PROTO_FOLDER_SEND or len(args) < 2:
+        return None, None
+    foldername = sanitize_filename(args[0])
+    try:
+        filesize = int(args[1])
+        if filesize < 0:
+            return None, None
+        return foldername, filesize
     except ValueError:
         return None, None
 

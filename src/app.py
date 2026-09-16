@@ -34,6 +34,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument("--auto-screenshot", action="store_true", help="Auto screenshot and quit mode")
     parser.add_argument("--screenshot-path", type=str, default="", help="Path to save auto screenshot")
+    parser.add_argument("--tab-index", type=int, default=0, help="Tab index to display on start")
     args, _ = parser.parse_known_args()
 
     # 1. Load config
@@ -67,19 +68,22 @@ def main() -> int:
     # 5. Create and show main window
     from src.ui.main_window import MainWindow
     window = MainWindow(config)
+    if args.tab_index > 0 and args.tab_index < window._sidebar.count():
+        window._sidebar.setCurrentRow(args.tab_index)
     window.show()
 
     if args.auto_screenshot:
         from PySide6.QtCore import QTimer
         def capture_and_quit():
-            target_path = args.screenshot_path or "/home/henry/.gemini/antigravity/brain/755897b6-21b8-41d0-8ad7-f610a2e21dd7/auto_screenshot.png"
+            target_path = args.screenshot_path or "/home/henry/.gemini/antigravity/brain/6fb0fd5e-d5d0-48fb-a6ac-973841aeb569/auto_screenshot.png"
             pixmap = window.grab()
             pixmap.save(target_path)
             log.info("Auto screenshot saved to %s", target_path)
-            QTimer.singleShot(2000, app.quit)
+            import os
+            os._exit(0)
 
-        log.info("Auto-screenshot mode active: capturing in 5 seconds...")
-        QTimer.singleShot(5000, capture_and_quit)
+        log.info("Auto-screenshot mode active: capturing in 2 seconds...")
+        QTimer.singleShot(2000, capture_and_quit)
 
     log.info("GUI ready")
     return app.exec()

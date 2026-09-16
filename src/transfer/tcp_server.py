@@ -37,6 +37,8 @@ from src.transfer.protocol import (
     PROTO_FILE_GET,
     PROTO_FILE_SEND,
 )
+
+PROTO_FOLDER_SEND = "FOLDER_SEND"
 from src.logger import get_logger
 
 log = get_logger(__name__)
@@ -142,6 +144,8 @@ class TCPFileServer(QObject):
                 self._handle_get(conn, args)
             elif command == PROTO_FILE_SEND:
                 self._handle_receive(conn, args, client_ip)
+            elif command == PROTO_FOLDER_SEND:
+                self._handle_receive_folder(conn, args, client_ip)
             else:
                 log.warning("Unknown protocol command from %s: %s", client_ip, command)
 
@@ -150,6 +154,81 @@ class TCPFileServer(QObject):
         finally:
             try:
                 conn.close()
+            except OSError:
+                pass
+
+    def _handle_receive_folder(
+        self, conn: socket.socket, args: list[str], client_ip: str,
+    ) -> None:
+        """Receive an intact zipped folder from the client and unpack it."""
+        import zipfile
+        if len(args) < 2:
+            log.warning("Invalid FOLDER_SEND header from %s", client_ip)
+            return
+
+        folder_name = sanitize_filename(args[0])
+        try:
+            filesize = int(args[1])
+        except ValueError:
+            log.warning("Invalid folder filesize from %s", client_ip)
+            return
+
+        os.makedirs(self._save_dir, exist_ok=True)
+        temp_zip_path = os.path.join(self._save_dir, f".temp_{folder_name}_{int(time.time())}.zip")
+        target_dir = os.path.join(self._save_dir, folder_name)
+
+        log.info("Receiving intact folder '%s' (%d bytes) from %s", folder_name, filesize, client_ip)
+
+        received = 0
+        start_time = time.perf_counter()
+        last_update = start_time
+        last_bytes = 0
+
+        try:
+            with open(temp_zip_path, "wb") as f:
+                while received < filesize:
+                    to_read = min(TRANSFER_CHUNK_SIZE, filesize - received)
+                    chunk = conn.recv(to_read)
+                    if not chunk:
+                        raise ConnectionError("Client disconnected during folder transfer")
+                    f.write(chunk)
+                    received += len(chunk)
+
+                    now = time.perf_counter()
+                    if now - last_update >= PROGRESS_UPDATE_INTERVAL_SEC:
+                        dt = now - last_update
+                        delta = received - last_bytes
+                        speed = (delta / dt) / (1024 * 1024) if dt > 0 else 0
+                        percent = int((received / filesize) * 100) if filesize > 0 else 100
+                        remaining = filesize - received
+                        eta = remaining / (delta / dt) if delta > 0 and dt > 0 else 0
+                        self.receive_progress.emit(percent, speed, eta)
+                        last_bytes = received
+                        last_update = now
+
+            self.receive_progress.emit(100, 0, 0)
+            elapsed = time.perf_counter() - start_time
+            log.info("Folder archive received in %.1fs, unpacking into %s...", elapsed, target_dir)
+
+            # Unzip folder intact
+            os.makedirs(target_dir, exist_ok=True)
+            with zipfile.ZipFile(temp_zip_path, "r") as zf:
+                zf.extractall(target_dir)
+
+            try:
+                os.remove(temp_zip_path)
+            except OSError:
+                pass
+
+            log.info("Folder '%s' extracted successfully to %s", folder_name, target_dir)
+            self.file_received.emit(folder_name, target_dir)
+
+        except Exception as exc:
+            log.error("Folder receive/extract failed: %s", exc)
+            self.error.emit(f"Folder receive failed: {exc}")
+            try:
+                if os.path.exists(temp_zip_path):
+                    os.remove(temp_zip_path)
             except OSError:
                 pass
 

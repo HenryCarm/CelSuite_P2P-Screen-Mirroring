@@ -169,6 +169,9 @@ class MirrorTab(QWidget):
         self._scan_btn = AnimatedButton("🔍 Subnet Scan")
         self._scan_btn.clicked.connect(self._start_subnet_scan)
 
+        self._hud_btn = AnimatedButton("🎮 Game HUD")
+        self._hud_btn.clicked.connect(self._toggle_game_hud)
+
         self._disconnect_btn = AnimatedButton("❌ Disconnect")
         self._disconnect_btn.setObjectName("action-danger")
         self._disconnect_btn.clicked.connect(self._disconnect)
@@ -177,6 +180,7 @@ class MirrorTab(QWidget):
         conn_actions_layout.addWidget(self._auto_btn)
         conn_actions_layout.addWidget(self._saved_btn)
         conn_actions_layout.addWidget(self._scan_btn)
+        conn_actions_layout.addWidget(self._hud_btn)
         conn_actions_layout.addWidget(self._disconnect_btn)
         hero_layout.addLayout(conn_actions_layout)
 
@@ -359,10 +363,20 @@ class MirrorTab(QWidget):
 
     def _on_heartbeat(self, ip: str, port: int) -> None:
         """Handle incoming heartbeat — connect and launch."""
-        if self._connected and self._phone_ip == ip:
+        if (self._connected and self._phone_ip == ip) or adb.is_scrcpy_running():
             # Already actively connected and mirroring; heartbeat is just a keep-alive
             return
         self._connect_worker(ip, port)
+
+    def _toggle_game_hud(self) -> None:
+        """Toggle LDPlayer-style Scrcpy Game HUD Overlay."""
+        if not hasattr(self, "_game_hud") or self._game_hud is None:
+            from src.ui.scrcpy_game_hud import ScrcpyGameHUDOverlay
+            self._game_hud = ScrcpyGameHUDOverlay()
+        if self._game_hud.isVisible():
+            self._game_hud.hide()
+        else:
+            self._game_hud.show()
 
     def _on_clipboard_received(self, text: str) -> None:
         try:

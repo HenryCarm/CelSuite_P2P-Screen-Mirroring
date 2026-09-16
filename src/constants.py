@@ -12,7 +12,7 @@ import sys
 
 # ── Application Metadata ──────────────────────────────────────────────────────
 APP_NAME = "CelSuite - Scrcpy Heartbeat"
-APP_VERSION = "269.14.0"
+APP_VERSION = "269.16.0"
 APP_AUTHOR = "Henry"
 APP_DOMAIN = "HenryJayZ.CelSuite"
 
@@ -50,6 +50,9 @@ DEFAULT_HEARTBEAT_PORT = 5556   # Phone → PC heartbeat UDP
 DEFAULT_DISCOVERY_PORT = 5557   # PC → Phone discovery broadcast UDP
 DEFAULT_ADB_PORT = 5555         # ADB TCP port on phone
 DEFAULT_TCP_TRANSFER_PORT = 5558  # Bi-directional file transfer TCP
+DEFAULT_REVERSE_VIDEO_PORT = 5560  # PC -> Phone video stream UDP
+DEFAULT_REVERSE_AUDIO_PORT = 5561  # PC -> Phone audio stream UDP
+DEFAULT_REVERSE_INPUT_PORT = 5562  # Phone -> PC input touch/key UDP
 
 HEARTBEAT_INTERVAL_SEC = 4.0    # How often the phone sends heartbeats
 DISCOVERY_INTERVAL_SEC = 3.0    # How often the PC broadcasts discovery

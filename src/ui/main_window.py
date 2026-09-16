@@ -45,6 +45,8 @@ from src.transfer.tcp_server import TCPFileServer
 from src.ui.about_tab import AboutTab
 from src.ui.logs_tab import LogsTab
 from src.ui.mirror_tab import MirrorTab
+from src.ui.pc_mirror_tab import PCMirrorTab
+from src.ui.phone_explorer_tab import PhoneExplorerTab
 from src.ui.settings_tab import SettingsTab
 from src.ui.styles import build_stylesheet
 from src.ui.transfer_tab import TransferTab
@@ -241,6 +243,16 @@ class MainWindow(QMainWindow):
         self._mirror_tab = MirrorTab(self._config)
         self._mirror_tab.connection_state_changed.connect(self._on_connection_state)
 
+        self._pc_mirror_tab = PCMirrorTab(
+            self._config,
+            get_phone_ip=lambda: self._mirror_tab.phone_ip,
+        )
+
+        self._phone_explorer_tab = PhoneExplorerTab(
+            self._config,
+            get_phone_ip=lambda: self._mirror_tab.phone_ip,
+        )
+
         self._transfer_tab = TransferTab(
             self._config,
             get_phone_ip=lambda: self._mirror_tab.phone_ip,
@@ -253,6 +265,8 @@ class MainWindow(QMainWindow):
         # Register navigation tabs
         tabs = [
             ("📱  Mirror Phone", self._mirror_tab),
+            ("🖥️  Mirror PC", self._pc_mirror_tab),
+            ("📁  Phone Storage", self._phone_explorer_tab),
             ("📤  File Transfer", self._transfer_tab),
             ("📜  Logs", self._logs_tab),
             ("🎨  Settings", self._settings_tab),

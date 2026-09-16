@@ -829,67 +829,120 @@ class FileTransferScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        layout = ColoredBoxLayout(orientation='vertical', bg_color=DARK_BG, padding=dp(20), spacing=dp(16))
+        layout = ColoredBoxLayout(orientation='vertical', bg_color=DARK_BG, padding=dp(16), spacing=dp(12))
         
-        title = Label(text="WiFi File Transfer Hub", font_size=sp(24), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(40))
+        # 1. Header
+        title = Label(text="WiFi File & Folder Manager", font_size=sp(22), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(36))
         layout.add_widget(title)
 
-        server_group = RoundedCard(orientation='vertical', padding=dp(16), spacing=dp(10), size_hint_y=None, height=dp(180))
-        server_group.add_widget(Label(text="WiFi Receiver Status: ACTIVE", font_size=sp(16), bold=True, color=SUCCESS, halign='left', size_hint_y=None, height=dp(20)))
+        # 2. Incoming receiver status card
+        server_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(6), size_hint_y=None, height=dp(125))
+        server_group.add_widget(Label(text="WiFi Receiver Status: ACTIVE", font_size=sp(14), bold=True, color=SUCCESS, halign='left', size_hint_y=None, height=dp(18)))
         
-        self.serv_file_lbl = Label(text="Waiting for PC transfer...", font_size=sp(14), color=TEXT_PRIMARY, halign='center')
-        self.serv_progress_lbl = Label(text="0%", font_size=sp(18), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(30))
+        self.serv_file_lbl = Label(text="Waiting for PC transfer...", font_size=sp(12), color=TEXT_PRIMARY, halign='center', size_hint_y=None, height=dp(18))
+        self.serv_progress_lbl = Label(text="0%", font_size=sp(14), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20))
         self.serv_progress = GradientBar(progress=0)
-        self.serv_stats = Label(text="Speed: -- MB/s  |  ETA: --:--", font_size=sp(12), color=TEXT_SECONDARY, size_hint_y=None, height=dp(20))
+        self.serv_stats = Label(text="Speed: -- MB/s  |  ETA: --:--", font_size=sp(11), color=TEXT_SECONDARY, size_hint_y=None, height=dp(16))
         
         server_group.add_widget(self.serv_file_lbl)
         server_group.add_widget(self.serv_progress_lbl)
         server_group.add_widget(self.serv_progress)
         server_group.add_widget(self.serv_stats)
 
-        sender_group = RoundedCard(orientation='vertical', padding=dp(16), spacing=dp(12), size_hint_y=None, height=dp(220))
-        sender_group.add_widget(Label(text="Send Vault File to PC", font_size=sp(16), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20)))
-        
-        self.file_chooser = FileChooserListView(path='/storage/emulated/0', size_hint_y=None, height=dp(250))
-        self.send_progress_lbl = Label(text="Push speed: --  |  ETA: --", font_size=sp(14), color=TEXT_PRIMARY, size_hint_y=None, height=dp(30))
+        # 3. Mobile File Manager Group
+        manager_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(8), size_hint_y=None, height=dp(480))
+        manager_group.add_widget(Label(text="Phone Storage Explorer (Multi-Select & Folders)", font_size=sp(15), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20)))
+
+        # Quick navigation bookmarks
+        quick_nav = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(34), spacing=dp(6))
+        bookmarks = [
+            ("📁 Storage", "/storage/emulated/0"),
+            ("📥 Downloads", "/storage/emulated/0/Download"),
+            ("📷 DCIM", "/storage/emulated/0/DCIM"),
+            ("🔒 Vault", VAULT_DIR),
+        ]
+        for b_name, b_path in bookmarks:
+            btn = AnimatedButton(text=b_name, btn_color=BUTTON_BG, font_size=sp(11), size_hint_y=None, height=dp(32))
+            btn.bind(on_press=lambda inst, p=b_path: self.set_browser_path(p))
+            quick_nav.add_widget(btn)
+        manager_group.add_widget(quick_nav)
+
+        # Path bar + Up button
+        path_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(36), spacing=dp(6))
+        self.up_btn = AnimatedButton(text="⬆ Up", btn_color=ACCENT_TERTIARY, size_hint_x=None, width=dp(60))
+        self.up_btn.bind(on_press=self.go_up_directory)
+        self.cur_path_lbl = Label(text="/storage/emulated/0", font_size=sp(11), color=TEXT_SECONDARY, halign='left', valign='middle')
+        self.cur_path_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        path_row.add_widget(self.up_btn)
+        path_row.add_widget(self.cur_path_lbl)
+        manager_group.add_widget(path_row)
+
+        # File Chooser with MULTISELECT enabled
+        init_path = '/storage/emulated/0' if os.path.exists('/storage/emulated/0') else os.path.expanduser('~')
+        self.file_chooser = FileChooserListView(path=init_path, multiselect=True, size_hint_y=None, height=dp(200))
+        self.file_chooser.bind(path=self.on_path_changed)
+        manager_group.add_widget(self.file_chooser)
+
+        # Progress bar and status
+        self.send_progress_lbl = Label(text="Select file(s) or send folder to PC", font_size=sp(12), color=TEXT_PRIMARY, size_hint_y=None, height=dp(22))
         self.send_bar = GradientBar(progress=0)
-        self.send_btn = AnimatedButton(text="Push Selected File to PC", btn_color=ACCENT_TERTIARY, size_hint_y=None, height=dp(48))
-        self.send_btn.bind(on_press=self.start_file_send_to_pc)
+        manager_group.add_widget(self.send_progress_lbl)
+        manager_group.add_widget(self.send_bar)
 
-        sender_group.height = dp(400)
-        sender_group.add_widget(self.file_chooser)
-        sender_group.add_widget(self.send_progress_lbl)
-        sender_group.add_widget(self.send_bar)
-        sender_group.add_widget(self.send_btn)
+        # Action Buttons Row (Multi-file send vs Whole folder send)
+        btn_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(44), spacing=dp(8))
+        self.send_files_btn = AnimatedButton(text="📤 Send Selected Files", btn_color=ACCENT_PRIMARY, font_size=sp(13))
+        self.send_files_btn.bind(on_press=self.start_multi_file_send)
+        
+        self.send_folder_btn = AnimatedButton(text="📦 Send Folder Intact", btn_color=ACCENT_TERTIARY, font_size=sp(13))
+        self.send_folder_btn.bind(on_press=self.start_folder_send)
 
-        # ── 3. Send Clipboard to PC Card ──────────────────────────────
-        clip_group = RoundedCard(orientation='vertical', padding=dp(16), spacing=dp(10), size_hint_y=None, height=dp(160))
-        clip_group.add_widget(Label(text="Clipboard Sync (Phone \u2192 PC)", font_size=sp(16), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20)))
+        btn_actions.add_widget(self.send_files_btn)
+        btn_actions.add_widget(self.send_folder_btn)
+        manager_group.add_widget(btn_actions)
 
-        self.clip_preview_lbl = Label(text="Tap below to send phone clipboard to PC", font_size=sp(13), color=TEXT_SECONDARY, halign='center', size_hint_y=None, height=dp(30))
+        # 4. Clipboard Sync Card
+        clip_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(6), size_hint_y=None, height=dp(110))
+        clip_group.add_widget(Label(text="Clipboard Bridge (Phone \u2192 PC)", font_size=sp(14), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(18)))
+
+        self.clip_preview_lbl = Label(text="Tap below to sync phone clipboard to PC", font_size=sp(11), color=TEXT_SECONDARY, halign='center', size_hint_y=None, height=dp(20))
         self.clip_preview_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
 
-        self.clip_send_btn = AnimatedButton(text="\U0001f4cb Send Clipboard to PC", btn_color=ACCENT_SECONDARY, color=(0.02, 0.10, 0.06, 1), size_hint_y=None, height=dp(48))
+        self.clip_send_btn = AnimatedButton(text="\U0001f4cb Send Clipboard to PC", btn_color=ACCENT_SECONDARY, color=(0.02, 0.10, 0.06, 1), size_hint_y=None, height=dp(38))
         self.clip_send_btn.bind(on_press=self.send_clipboard_to_pc)
 
         clip_group.add_widget(self.clip_preview_lbl)
         clip_group.add_widget(self.clip_send_btn)
 
+        # Scroll wrapper
         scroll = ScrollView(size_hint=(1, 1))
-        content = BoxLayout(orientation='vertical', spacing=dp(14), size_hint_y=None)
+        content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None)
         content.bind(minimum_height=content.setter('height'))
         content.add_widget(server_group)
-        content.add_widget(sender_group)
+        content.add_widget(manager_group)
         content.add_widget(clip_group)
         scroll.add_widget(content)
 
         layout.add_widget(scroll)
 
-        back_btn = AnimatedButton(text="Back to Home", btn_color=BUTTON_BG, color=(1, 1, 1, 1), size_hint_y=None, height=dp(50))
+        back_btn = AnimatedButton(text="Back to Home", btn_color=BUTTON_BG, color=(1, 1, 1, 1), size_hint_y=None, height=dp(44))
         back_btn.bind(on_press=self.go_back)
         layout.add_widget(back_btn)
         
         self.add_widget(layout)
+
+    def on_path_changed(self, instance, new_path):
+        self.cur_path_lbl.text = new_path
+
+    def set_browser_path(self, target_path):
+        if os.path.exists(target_path):
+            self.file_chooser.path = target_path
+
+    def go_up_directory(self, instance):
+        cur = self.file_chooser.path
+        parent = os.path.dirname(cur.rstrip("/\\"))
+        if parent and os.path.exists(parent):
+            self.file_chooser.path = parent
 
     def send_clipboard_to_pc(self, instance):
         try:
@@ -930,53 +983,143 @@ class FileTransferScreen(Screen):
     def go_back(self, instance):
         self.manager.current = 'main'
 
-    def populate_vault_files(self, instance):
-        try:
-            files = sorted(os.listdir(VAULT_DIR))
-            self.sender_spinner.values = [f for f in files if os.path.isfile(os.path.join(VAULT_DIR, f))]
-        except OSError as e:
-            app_log(f"Failed to list vault files: {e}")
-            self.sender_spinner.values = []
-
-    def start_file_send_to_pc(self, instance):
-        selection = getattr(self, 'file_chooser', None)
-        if not selection or not selection.selection:
-            self.send_progress_lbl.text = "Please select a file first!"
+    def start_multi_file_send(self, instance):
+        """Send all selected files sequentially to PC."""
+        selection = getattr(self.file_chooser, 'selection', [])
+        if not selection:
+            self.send_progress_lbl.text = "Please tap and select file(s) first!"
             return
-            
-        filepath = selection.selection[0]
-        filename = os.path.basename(filepath)
-            
+
+        # Filter out directories if any are in selection
+        files_to_send = [f for f in selection if os.path.isfile(f)]
+        if not files_to_send:
+            self.send_progress_lbl.text = "No valid files selected! Use 'Send Folder' for folders."
+            return
+
         main_screen = self.manager.get_screen('main')
-        pc_ip = main_screen.discovered_pc_ip
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
         if not pc_ip:
-            self.send_progress_lbl.text = "No discovered PC IP!"
+            self.send_progress_lbl.text = "No discovered PC IP! Link device first."
             return
 
-        self.send_btn.disabled = True
-        self.send_progress_lbl.text = "Connecting to PC File server..."
-        
+        self.send_files_btn.disabled = True
+        self.send_folder_btn.disabled = True
+
         def _task():
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(10.0)
+            total = len(files_to_send)
+            success_count = 0
+            for idx, filepath in enumerate(files_to_send):
+                filename = os.path.basename(filepath)
+                Clock.schedule_once(lambda dt, fn=filename, i=idx+1, t=total: setattr(
+                    self.send_progress_lbl, 'text', f"Sending [{i}/{t}]: '{fn}'..."
+                ))
+                ok = self._stream_single_file(pc_ip, filepath, filename)
+                if ok:
+                    success_count += 1
+
+            Clock.schedule_once(lambda dt, s=success_count, t=total: self.on_batch_complete(s, t))
+
+        threading.Thread(target=_task, daemon=True).start()
+
+    def _stream_single_file(self, pc_ip, filepath, filename):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(15.0)
+        try:
+            sock.connect((pc_ip, PORT_TCP_TRANSFER))
+            filesize = os.path.getsize(filepath)
+            header = f"FILE_SEND|{filename}|{filesize}\n"
+            sock.sendall(header.encode('utf-8'))
+
+            sent_bytes = 0
+            start_time = time.time()
+            last_progress_time = start_time
+            last_bytes = 0
+
+            with open(filepath, "rb") as f:
+                while sent_bytes < filesize:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    sock.sendall(chunk)
+                    sent_bytes += len(chunk)
+
+                    now = time.time()
+                    if now - last_progress_time >= 0.5:
+                        dt = now - last_progress_time
+                        delta = sent_bytes - last_bytes
+                        speed = (delta / dt) / (1024 * 1024) if dt > 0 else 0
+                        percent = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
+                        eta = (filesize - sent_bytes) / (delta / dt) if delta > 0 else 0
+
+                        Clock.schedule_once(lambda dt, p=percent, s=speed, e=eta, fn=filename: self.update_send_ui(p, s, e, fn))
+                        last_bytes = sent_bytes
+                        last_progress_time = now
+
+            sock.close()
+            return True
+        except Exception as e:
+            app_log(f"Stream error for {filename}: {e}")
             try:
+                sock.close()
+            except OSError:
+                pass
+            return False
+
+    def start_folder_send(self, instance):
+        """Archive current folder into a zip and stream as FOLDER_SEND to PC."""
+        folder_path = self.file_chooser.path
+        if not os.path.isdir(folder_path):
+            self.send_progress_lbl.text = "Current path is not a directory!"
+            return
+
+        folder_name = os.path.basename(folder_path.rstrip("/\\")) or "Phone_Storage"
+
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if not pc_ip:
+            self.send_progress_lbl.text = "No discovered PC IP! Link device first."
+            return
+
+        self.send_files_btn.disabled = True
+        self.send_folder_btn.disabled = True
+        self.send_progress_lbl.text = f"Packaging '{folder_name}' intact..."
+
+        def _task():
+            import zipfile
+            temp_zip = os.path.join(VAULT_DIR, f".pack_{folder_name}.zip")
+            try:
+                with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for root, dirs, files in os.walk(folder_path):
+                        for f in files:
+                            full_p = os.path.join(root, f)
+                            rel_p = os.path.relpath(full_p, folder_path)
+                            try:
+                                zf.write(full_p, rel_p)
+                            except Exception:
+                                pass
+
+                filesize = os.path.getsize(temp_zip)
+                Clock.schedule_once(lambda dt: setattr(self.send_progress_lbl, 'text', f"Streaming folder '{folder_name}' ({filesize // (1024*1024)} MB)..."))
+
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(30.0)
                 sock.connect((pc_ip, PORT_TCP_TRANSFER))
-                filesize = os.path.getsize(filepath)
-                header = f"FILE_SEND|{filename}|{filesize}\n"
+                header = f"FOLDER_SEND|{folder_name}|{filesize}\n"
                 sock.sendall(header.encode('utf-8'))
-                
+
                 sent_bytes = 0
                 start_time = time.time()
                 last_progress_time = start_time
                 last_bytes = 0
-                
-                with open(filepath, "rb") as f:
+
+                with open(temp_zip, "rb") as f:
                     while sent_bytes < filesize:
                         chunk = f.read(65536)
-                        if not chunk: break
+                        if not chunk:
+                            break
                         sock.sendall(chunk)
                         sent_bytes += len(chunk)
-                        
+
                         now = time.time()
                         if now - last_progress_time >= 0.5:
                             dt = now - last_progress_time
@@ -984,29 +1127,43 @@ class FileTransferScreen(Screen):
                             speed = (delta / dt) / (1024 * 1024) if dt > 0 else 0
                             percent = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
                             eta = (filesize - sent_bytes) / (delta / dt) if delta > 0 else 0
-                            
-                            Clock.schedule_once(lambda dt, p=percent, s=speed, e=eta: self.update_send_ui(p, s, e))
-                            
+
+                            Clock.schedule_once(lambda dt, p=percent, s=speed, e=eta, fn=folder_name: self.update_send_ui(p, s, e, f"Folder: {fn}"))
                             last_bytes = sent_bytes
                             last_progress_time = now
-                
+
                 sock.close()
-                Clock.schedule_once(lambda dt: self.on_send_complete(True, f"Sent '{filename}' successfully!"))
+                try:
+                    os.remove(temp_zip)
+                except OSError:
+                    pass
+                Clock.schedule_once(lambda dt: self.on_folder_complete(True, f"Folder '{folder_name}' sent & unpacked on PC!"))
+
             except Exception as e:
-                try: sock.close()
-                except OSError: pass
-                Clock.schedule_once(lambda dt, err=str(e): self.on_send_complete(False, f"Push failed: {err}"))
+                try:
+                    if os.path.exists(temp_zip):
+                        os.remove(temp_zip)
+                except OSError:
+                    pass
+                Clock.schedule_once(lambda dt, err=str(e): self.on_folder_complete(False, f"Folder send failed: {err}"))
 
         threading.Thread(target=_task, daemon=True).start()
 
-    def update_send_ui(self, percent, speed, eta):
+    def update_send_ui(self, percent, speed, eta, name=""):
         self.send_bar.progress = percent
-        self.send_progress_lbl.text = f"Progress: {percent}% | Speed: {speed:.1f} MB/s | ETA: {int(eta)}s"
+        self.send_progress_lbl.text = f"Sending '{name}' | {percent}% | {speed:.1f} MB/s | ETA: {int(eta)}s"
 
-    def on_send_complete(self, success, msg):
-        self.send_btn.disabled = False
+    def on_batch_complete(self, success_count, total):
+        self.send_files_btn.disabled = False
+        self.send_folder_btn.disabled = False
+        self.send_bar.progress = 100 if success_count == total else 50
+        self.send_progress_lbl.text = f"Finished: {success_count}/{total} files sent successfully!"
+
+    def on_folder_complete(self, success, msg):
+        self.send_files_btn.disabled = False
+        self.send_folder_btn.disabled = False
+        self.send_bar.progress = 100 if success else 0
         self.send_progress_lbl.text = msg
-        if success: self.send_bar.progress = 100
 
     def update_progress_from_server(self, percent, speed, eta, filename):
         def _update(dt):
@@ -1157,7 +1314,7 @@ class SettingsScreen(Screen):
         card.add_widget(fit_box)
 
         # ── Version Badge ────────────────────────────────────────────────
-        ver_lbl = Label(text="CelSuite Mobile • Version v269.3.1", color=ACCENT_SECONDARY, font_size=sp(13), bold=True, halign='center', size_hint_y=None, height=dp(24))
+        ver_lbl = Label(text="CelSuite Mobile • Version v269.16.0", color=ACCENT_SECONDARY, font_size=sp(13), bold=True, halign='center', size_hint_y=None, height=dp(24))
         card.add_widget(ver_lbl)
         
         layout.add_widget(card)
@@ -1228,7 +1385,7 @@ class HelpScreen(Screen):
         content.bind(minimum_height=content.setter('height'))
         
         guide_text = (
-            "[b]CelSuite - Scrcpy Heartbeat v269.11.0[/b]\n\n"
+            "[b]CelSuite - Scrcpy Heartbeat v269.16.0[/b]\n\n"
             "[b]Quick Launch Instructions:[/b]\n"
             "1. Link phone and PC to the same WiFi/hotspot.\n"
             "2. Open the PC PySide6 CelSuite client, then open this app on your phone.\n"
