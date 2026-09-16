@@ -1,11 +1,11 @@
 [app]
-title = CelSuite - Scrcpy Heartbeat
+title = Cs. - P2P Screen Mirror
 package.name = scrcpyheartbeat
 package.domain = henryjayz.celsuite
 source.dir = android
 source.include_exts = py,png,jpg,kv,atlas,jpeg
-version = 269.16.0
-android.numeric_version = 2691600
+version = 269.17.0
+android.numeric_version = 2691700
 requirements = python3,kivy==2.2.1,pyjnius
 orientation = portrait
 fullscreen = 0

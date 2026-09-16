@@ -91,13 +91,15 @@ import subprocess
 _xdotool_bin = shutil.which("xdotool")
 HAS_XDOTOOL = bool(_xdotool_bin and sys.platform.startswith("linux"))
 
-try:
-    import pyautogui
-    pyautogui.FAILSAFE = False
-    pyautogui.PAUSE = 0
-    HAS_PYAUTOGUI = True
-except ImportError:
-    HAS_PYAUTOGUI = False
+HAS_PYAUTOGUI = False
+if sys.platform == "win32":
+    try:
+        import pyautogui
+        pyautogui.FAILSAFE = False
+        pyautogui.PAUSE = 0
+        HAS_PYAUTOGUI = True
+    except Exception:
+        HAS_PYAUTOGUI = False
 
 
 class InputInjector:

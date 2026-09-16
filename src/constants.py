@@ -11,8 +11,8 @@ import os
 import sys
 
 # ── Application Metadata ──────────────────────────────────────────────────────
-APP_NAME = "CelSuite - Scrcpy Heartbeat"
-APP_VERSION = "269.16.0"
+APP_NAME = "CelSuite - P2P Screen Mirror"
+APP_VERSION = "269.17.0"
 APP_AUTHOR = "Henry"
 APP_DOMAIN = "HenryJayZ.CelSuite"
 

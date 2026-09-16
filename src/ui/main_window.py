@@ -195,15 +195,24 @@ class MainWindow(QMainWindow):
         
         logo_icon = QLabel()
         logo_icon.setFixedSize(24, 24)
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "icon.png")
-        if os.path.exists(icon_path):
-            pix = QPixmap(icon_path)
-            if not pix.isNull():
-                logo_icon.setPixmap(pix.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            else:
-                logo_icon.setText("✨")
-        else:
-            logo_icon.setText("✨")
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        icon_candidates = [
+            os.path.join(root_dir, "icon.png"),
+            os.path.join(root_dir, "src", "resources", "icon.png"),
+            os.path.join(root_dir, "android", "icon.png"),
+            os.path.join(root_dir, "icon.webp"),
+            self._config.get("app_icon", DEFAULT_ICON),
+        ]
+        loaded_icon = False
+        for cand in icon_candidates:
+            if cand and os.path.exists(cand):
+                pix = QPixmap(cand)
+                if not pix.isNull():
+                    logo_icon.setPixmap(pix.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                    loaded_icon = True
+                    break
+        if not loaded_icon:
+            logo_icon.setText("📱")
         title_box.addWidget(logo_icon)
 
         title_lbl = QLabel(APP_NAME)
@@ -212,11 +221,13 @@ class MainWindow(QMainWindow):
         title_box.addStretch()
         sidebar_layout.addLayout(title_box)
 
-        # Sidebar List
+        # Sidebar List (Scrollbars strictly disabled to prevent clipping)
         self._sidebar = QListWidget()
         self._sidebar.setObjectName("sidebar")
+        self._sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sidebar.currentRowChanged.connect(self._on_sidebar_changed)
-        sidebar_layout.addWidget(self._sidebar)
+        sidebar_layout.addWidget(self._sidebar, 1)
 
         sidebar_layout.addStretch()
 

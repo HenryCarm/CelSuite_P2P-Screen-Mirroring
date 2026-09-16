@@ -617,7 +617,17 @@ class MainScreen(Screen):
             face_img = Image(source=face_path, size_hint=(None, 1), width=dp(30), allow_stretch=True, keep_ratio=True)
             top_bar.add_widget(face_img)
 
-        self.label = Label(text="CelSuite - Scrcpy Heartbeat :)", font_size=sp(15), bold=True, color=ACCENT_PRIMARY, size_hint_x=1.0, halign='left', valign='middle')
+        self.label = Label(
+            text="CelSuite - Peer2Peer Screen Mirror :)",
+            font_size=sp(14),
+            bold=True,
+            color=ACCENT_PRIMARY,
+            outline_color=(1, 1, 1, 1),
+            outline_width=dp(1.2),
+            size_hint_x=1.0,
+            halign='left',
+            valign='middle'
+        )
         self.label.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
         top_bar.add_widget(self.label)
         content.add_widget(top_bar)
@@ -647,18 +657,22 @@ class MainScreen(Screen):
         hero_card.add_widget(restart_btn)
         content.add_widget(hero_card)
         
-        # ── 3. 2x2 Glassmorphic Action Grid ──────────────────────────────
-        grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(220))
+        # ── 3. 2x3 Glassmorphic Action Grid (with PC Mirroring) ──────────
+        grid = GridLayout(cols=2, spacing=dp(10), size_hint_y=None, height=dp(325))
         
-        transfer_card = GridCard(icon="TRANSFER", title="WiFi Transfer", subtitle="Send & receive files", btn_color=CARD_BG, on_press_callback=self.go_transfer)
-        vault_card = GridCard(icon="VAULT", title="File Vault", subtitle="Downloaded media", btn_color=CARD_BG, on_press_callback=self.go_vault)
-        settings_card = GridCard(icon="SETTINGS", title="Settings & Help", subtitle="App preferences", btn_color=CARD_BG, on_press_callback=self.go_settings)
-        logs_card = GridCard(icon="LOGS", title="System Logs", subtitle="Live terminal logs", btn_color=CARD_BG, on_press_callback=self.go_logs)
+        pc_mirror_card = GridCard(icon="🖥️ PC MIRROR", title="Mirror PC", subtitle="View & control PC", btn_color=CARD_BG, on_press_callback=self.go_pc_mirror)
+        transfer_card = GridCard(icon="📁 TRANSFER", title="WiFi Transfer", subtitle="Send & receive files", btn_color=CARD_BG, on_press_callback=self.go_transfer)
+        vault_card = GridCard(icon="🔒 VAULT", title="File Vault", subtitle="Downloaded media", btn_color=CARD_BG, on_press_callback=self.go_vault)
+        settings_card = GridCard(icon="🎨 SETTINGS", title="Settings & Help", subtitle="App preferences", btn_color=CARD_BG, on_press_callback=self.go_settings)
+        logs_card = GridCard(icon="📜 LOGS", title="System Logs", subtitle="Live terminal logs", btn_color=CARD_BG, on_press_callback=self.go_logs)
+        help_card = GridCard(icon="❓ HELP", title="Setup Manual", subtitle="Guide & instructions", btn_color=CARD_BG, on_press_callback=self.go_help)
         
+        grid.add_widget(pc_mirror_card)
         grid.add_widget(transfer_card)
         grid.add_widget(vault_card)
         grid.add_widget(settings_card)
         grid.add_widget(logs_card)
+        grid.add_widget(help_card)
         
         content.add_widget(grid)
         scroll.add_widget(content)
@@ -700,6 +714,9 @@ class MainScreen(Screen):
                 
         self.tint_rect.pos = (0, 0)
         self.tint_rect.size = win_size
+
+    def go_pc_mirror(self, instance):
+        self.manager.current = 'pc_mirror'
 
     def go_transfer(self, instance):
         self.manager.current = 'transfer'
@@ -825,184 +842,551 @@ class MainScreen(Screen):
                 pass
 
 
+class PCMirrorScreen(Screen):
+    """
+    Client screen for Reverse PC Mirroring.
+    Receives PC desktop stream info, maps touches to PC input injector via UDP:5562,
+    and provides remote mouse and keyboard shortcuts.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = ColoredBoxLayout(orientation='vertical', bg_color=DARK_BG, padding=dp(12), spacing=dp(8))
+        
+        # 1. Top bar: Back button + Title + Status badge
+        top_bar = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40), spacing=dp(8))
+        back_btn = AnimatedButton(text="◀ Back", btn_color=BUTTON_BG, size_hint_x=None, width=dp(75))
+        back_btn.bind(on_press=self.go_back)
+        
+        title_lbl = Label(
+            text="🖥️ PC Screen Mirroring",
+            font_size=sp(16),
+            bold=True,
+            color=ACCENT_PRIMARY,
+            halign='left',
+            valign='middle'
+        )
+        title_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        
+        self.status_badge = Label(
+            text="Waiting for PC...",
+            font_size=sp(11),
+            bold=True,
+            color=WARNING,
+            size_hint_x=None,
+            width=dp(130),
+            halign='right',
+            valign='middle'
+        )
+        self.status_badge.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        
+        top_bar.add_widget(back_btn)
+        top_bar.add_widget(title_lbl)
+        top_bar.add_widget(self.status_badge)
+        self.layout.add_widget(top_bar)
+        
+        # 2. Interactive PC Touchpad / Display Area
+        self.touch_area = RoundedCard(orientation='vertical', padding=dp(14), spacing=dp(6), size_hint=(1, 1))
+        
+        hint_lbl = Label(
+            text="""Interactive PC Touchpad & Display Area\n\n• Drag finger: Moves mouse cursor\n• Tap: Left Click  |  Hold: Drag\n• Commands sent instantly to PC port 5562""",
+            font_size=sp(13),
+            color=TEXT_SECONDARY,
+            halign='center',
+            valign='middle'
+        )
+        hint_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        self.touch_area.add_widget(hint_lbl)
+        self.layout.add_widget(self.touch_area)
+        
+        # 3. Quick Mouse Controls Row
+        mouse_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(38), spacing=dp(6))
+        
+        btn_lclick = AnimatedButton(text="🖱️ Left Click", btn_color=BUTTON_BG, font_size=sp(12))
+        btn_lclick.bind(on_press=lambda x: self.send_mouse_cmd("CLICK", 1, 0))
+        
+        btn_rclick = AnimatedButton(text="🖱️ Right Click", btn_color=BUTTON_BG, font_size=sp(12))
+        btn_rclick.bind(on_press=lambda x: self.send_mouse_cmd("RCLICK", 3, 0))
+        
+        btn_scroll_up = AnimatedButton(text="⬆ Scroll", btn_color=BUTTON_BG, font_size=sp(12), size_hint_x=0.7)
+        btn_scroll_up.bind(on_press=lambda x: self.send_mouse_cmd("SCROLL", 1, 0))
+        
+        btn_scroll_dn = AnimatedButton(text="⬇ Scroll", btn_color=BUTTON_BG, font_size=sp(12), size_hint_x=0.7)
+        btn_scroll_dn.bind(on_press=lambda x: self.send_mouse_cmd("SCROLL", -1, 0))
+        
+        mouse_row.add_widget(btn_lclick)
+        mouse_row.add_widget(btn_rclick)
+        mouse_row.add_widget(btn_scroll_up)
+        mouse_row.add_widget(btn_scroll_dn)
+        self.layout.add_widget(mouse_row)
+        
+        # 4. Keyboard Shortcuts Toolbar
+        keys_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(36), spacing=dp(4))
+        shortcuts = [
+            ("Space", "space"),
+            ("Enter", "enter"),
+            ("Esc", "esc"),
+            ("Tab", "tab"),
+            ("Win+D", "win_d"),
+            ("Alt+Tab", "alt_tab"),
+            ("Copy", "copy"),
+            ("Paste", "paste"),
+        ]
+        for label, macro in shortcuts:
+            kbtn = AnimatedButton(text=label, btn_color=CARD_BG, font_size=sp(10))
+            if macro in ("win_d", "alt_tab", "copy", "paste"):
+                kbtn.bind(on_press=lambda inst, m=macro: self.send_macro(m))
+            else:
+                kbtn.bind(on_press=lambda inst, k=macro: self.send_key(k))
+            keys_row.add_widget(kbtn)
+        self.layout.add_widget(keys_row)
+        
+        self.add_widget(self.layout)
+
+    def on_enter(self):
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if pc_ip:
+            self.status_badge.text = f"Linked: {pc_ip}"
+            self.status_badge.color = SUCCESS
+        else:
+            self.status_badge.text = "PC not linked yet"
+            self.status_badge.color = WARNING
+
+    def go_back(self, instance):
+        self.manager.current = 'main'
+
+    def send_touch_cmd(self, touch_id, action, x, y):
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if not pc_ip:
+            return
+        
+        area = self.touch_area
+        if not (area.x <= x <= area.right and area.y <= y <= area.top):
+            return
+            
+        norm_x = (x - area.x) / max(1.0, float(area.width))
+        norm_y = 1.0 - ((y - area.y) / max(1.0, float(area.height)))
+        norm_x = max(0.0, min(1.0, norm_x))
+        norm_y = max(0.0, min(1.0, norm_y))
+        
+        cmd = f"TOUCH|{touch_id}|{action}|{norm_x:.4f}|{norm_y:.4f}\n"
+        self._udp_send(pc_ip, 5562, cmd)
+
+    def send_mouse_cmd(self, action, p1, p2):
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if pc_ip:
+            cmd = f"MOUSE|{action}|{p1}|{p2}\n"
+            self._udp_send(pc_ip, 5562, cmd)
+
+    def send_key(self, key_name):
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if pc_ip:
+            cmd = f"KEY|TAP|{key_name}\n"
+            self._udp_send(pc_ip, 5562, cmd)
+
+    def send_macro(self, macro_name):
+        main_screen = self.manager.get_screen('main')
+        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
+        if pc_ip:
+            cmd = f"MACRO|{macro_name}\n"
+            self._udp_send(pc_ip, 5562, cmd)
+
+    def _udp_send(self, ip, port, msg):
+        def _task():
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(msg.encode('utf-8'), (ip, port))
+                s.close()
+            except Exception:
+                pass
+        threading.Thread(target=_task, daemon=True).start()
+
+    def on_touch_down(self, touch):
+        if self.touch_area.collide_point(*touch.pos):
+            self.send_touch_cmd(touch.id, "DOWN", touch.x, touch.y)
+            touch.grab(self)
+            return True
+        return super().on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        if touch.grab_current is self:
+            self.send_touch_cmd(touch.id, "MOVE", touch.x, touch.y)
+            return True
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            self.send_touch_cmd(touch.id, "UP", touch.x, touch.y)
+            touch.ungrab(self)
+            return True
+        return super().on_touch_up(touch)
+
+
 class FileTransferScreen(Screen):
+    """
+    High-performance, non-laggy Paginated File & Folder Transfer Screen.
+    Eliminates nested FileChooserListView to prevent touch freezes.
+    Supports Android 11+ MANAGE_EXTERNAL_STORAGE permission and SAF document tree folder selection.
+    """
+    PAGE_SIZE = 8
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        layout = ColoredBoxLayout(orientation='vertical', bg_color=DARK_BG, padding=dp(16), spacing=dp(12))
+        self.current_path = "/storage/emulated/0" if os.path.exists("/storage/emulated/0") else VAULT_DIR
+        self.current_items = []
+        self.page = 1
+        self.selected_files = set()
+        self.menu_expanded = False
         
-        # 1. Header
-        title = Label(text="WiFi File & Folder Manager", font_size=sp(22), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(36))
-        layout.add_widget(title)
-
-        # 2. Incoming receiver status card
-        server_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(6), size_hint_y=None, height=dp(125))
-        server_group.add_widget(Label(text="WiFi Receiver Status: ACTIVE", font_size=sp(14), bold=True, color=SUCCESS, halign='left', size_hint_y=None, height=dp(18)))
+        main_layout = ColoredBoxLayout(orientation='vertical', bg_color=DARK_BG, padding=dp(12), spacing=dp(8))
         
-        self.serv_file_lbl = Label(text="Waiting for PC transfer...", font_size=sp(12), color=TEXT_PRIMARY, halign='center', size_hint_y=None, height=dp(18))
-        self.serv_progress_lbl = Label(text="0%", font_size=sp(14), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20))
-        self.serv_progress = GradientBar(progress=0)
-        self.serv_stats = Label(text="Speed: -- MB/s  |  ETA: --:--", font_size=sp(11), color=TEXT_SECONDARY, size_hint_y=None, height=dp(16))
+        # 1. Header with Options Menu Button
+        header_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(36), spacing=dp(6))
+        title = Label(text="WiFi File & Folder Hub", font_size=sp(16), bold=True, color=ACCENT_PRIMARY, size_hint_x=1.0, halign='left', valign='middle')
+        title.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
         
-        server_group.add_widget(self.serv_file_lbl)
-        server_group.add_widget(self.serv_progress_lbl)
-        server_group.add_widget(self.serv_progress)
-        server_group.add_widget(self.serv_stats)
+        self.options_btn = AnimatedButton(text="⋮ Menu", btn_color=CARD_BG, size_hint_x=None, width=dp(70), font_size=sp(12))
+        self.options_btn.bind(on_press=self.toggle_options_menu)
+        
+        header_row.add_widget(title)
+        header_row.add_widget(self.options_btn)
+        main_layout.add_widget(header_row)
 
-        # 3. Mobile File Manager Group
-        manager_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(8), size_hint_y=None, height=dp(480))
-        manager_group.add_widget(Label(text="Phone Storage Explorer (Multi-Select & Folders)", font_size=sp(15), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(20)))
+        # 2. Permission Status Badge (Android 11+ MANAGE_EXTERNAL_STORAGE)
+        self.perm_badge = AnimatedButton(text="Checking storage permissions...", btn_color=BUTTON_BG, size_hint_y=None, height=dp(28), font_size=sp(11))
+        self.perm_badge.bind(on_press=self.request_full_storage_permission)
+        main_layout.add_widget(self.perm_badge)
 
-        # Quick navigation bookmarks
-        quick_nav = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(34), spacing=dp(6))
+        # 3. Receiver status mini card
+        recv_card = RoundedCard(orientation='horizontal', padding=dp(8), spacing=dp(8), size_hint_y=None, height=dp(36))
+        self.serv_status_lbl = Label(text="WiFi Receiver: ACTIVE (port 5558)", font_size=sp(11), color=SUCCESS, halign='left', valign='middle')
+        self.serv_status_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        recv_card.add_widget(self.serv_status_lbl)
+        main_layout.add_widget(recv_card)
+
+        # 4. Options Dropdown Panel (Collapsible)
+        self.menu_panel = RoundedCard(orientation='vertical', padding=dp(8), spacing=dp(6), size_hint_y=None, height=dp(115))
+        self.menu_panel.opacity = 0
+        self.menu_panel.height = 0
+        
+        m_row1 = BoxLayout(orientation='horizontal', spacing=dp(6), size_hint_y=None, height=dp(32))
+        btn_sel_all = AnimatedButton(text="☑️ Select All", btn_color=CARD_BG, font_size=sp(11))
+        btn_sel_all.bind(on_press=self.select_all_page)
+        btn_clr_sel = AnimatedButton(text="⬜ Clear All", btn_color=CARD_BG, font_size=sp(11))
+        btn_clr_sel.bind(on_press=self.clear_selection)
+        m_row1.add_widget(btn_sel_all)
+        m_row1.add_widget(btn_clr_sel)
+        
+        m_row2 = BoxLayout(orientation='horizontal', spacing=dp(6), size_hint_y=None, height=dp(32))
+        btn_saf = AnimatedButton(text="📁 Open Folder (SAF)", btn_color=ACCENT_TERTIARY, font_size=sp(11))
+        btn_saf.bind(on_press=self.open_saf_folder)
+        btn_perm = AnimatedButton(text="🔑 Full File Access", btn_color=ACCENT_SECONDARY, color=(0.02, 0.10, 0.06, 1), font_size=sp(11))
+        btn_perm.bind(on_press=self.request_full_storage_permission)
+        m_row2.add_widget(btn_saf)
+        m_row2.add_widget(btn_perm)
+        
+        m_row3 = BoxLayout(orientation='horizontal', spacing=dp(6), size_hint_y=None, height=dp(32))
+        btn_refresh = AnimatedButton(text="🔄 Refresh", btn_color=BUTTON_BG, font_size=sp(11))
+        btn_refresh.bind(on_press=lambda x: self.load_directory())
+        m_row3.add_widget(btn_refresh)
+
+        self.menu_panel.add_widget(m_row1)
+        self.menu_panel.add_widget(m_row2)
+        self.menu_panel.add_widget(m_row3)
+        main_layout.add_widget(self.menu_panel)
+
+        # 5. Quick navigation bookmarks
+        quick_nav = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(32), spacing=dp(4))
         bookmarks = [
-            ("📁 Storage", "/storage/emulated/0"),
+            ("📁 /sdcard", "/storage/emulated/0"),
             ("📥 Downloads", "/storage/emulated/0/Download"),
             ("📷 DCIM", "/storage/emulated/0/DCIM"),
             ("🔒 Vault", VAULT_DIR),
         ]
         for b_name, b_path in bookmarks:
-            btn = AnimatedButton(text=b_name, btn_color=BUTTON_BG, font_size=sp(11), size_hint_y=None, height=dp(32))
-            btn.bind(on_press=lambda inst, p=b_path: self.set_browser_path(p))
-            quick_nav.add_widget(btn)
-        manager_group.add_widget(quick_nav)
+            b_btn = AnimatedButton(text=b_name, btn_color=BUTTON_BG, font_size=sp(10))
+            b_btn.bind(on_press=lambda inst, p=b_path: self.set_path(p))
+            quick_nav.add_widget(b_btn)
+        main_layout.add_widget(quick_nav)
 
-        # Path bar + Up button
-        path_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(36), spacing=dp(6))
-        self.up_btn = AnimatedButton(text="⬆ Up", btn_color=ACCENT_TERTIARY, size_hint_x=None, width=dp(60))
-        self.up_btn.bind(on_press=self.go_up_directory)
-        self.cur_path_lbl = Label(text="/storage/emulated/0", font_size=sp(11), color=TEXT_SECONDARY, halign='left', valign='middle')
-        self.cur_path_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
+        # 6. Current Path + Up button
+        path_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(32), spacing=dp(6))
+        self.up_btn = AnimatedButton(text="⬆ Up", btn_color=ACCENT_TERTIARY, size_hint_x=None, width=dp(55), font_size=sp(11))
+        self.up_btn.bind(on_press=self.go_up)
+        self.path_lbl = Label(text=self.current_path, font_size=sp(11), color=TEXT_SECONDARY, halign='left', valign='middle')
+        self.path_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
         path_row.add_widget(self.up_btn)
-        path_row.add_widget(self.cur_path_lbl)
-        manager_group.add_widget(path_row)
+        path_row.add_widget(self.path_lbl)
+        main_layout.add_widget(path_row)
 
-        # File Chooser with MULTISELECT enabled
-        init_path = '/storage/emulated/0' if os.path.exists('/storage/emulated/0') else os.path.expanduser('~')
-        self.file_chooser = FileChooserListView(path=init_path, multiselect=True, size_hint_y=None, height=dp(200))
-        self.file_chooser.bind(path=self.on_path_changed)
-        manager_group.add_widget(self.file_chooser)
+        # 7. Paginated Items Container (Zero nested scrollview lag!)
+        self.items_container = BoxLayout(orientation='vertical', spacing=dp(4), size_hint=(1, 1))
+        main_layout.add_widget(self.items_container)
 
-        # Progress bar and status
-        self.send_progress_lbl = Label(text="Select file(s) or send folder to PC", font_size=sp(12), color=TEXT_PRIMARY, size_hint_y=None, height=dp(22))
-        self.send_bar = GradientBar(progress=0)
-        manager_group.add_widget(self.send_progress_lbl)
-        manager_group.add_widget(self.send_bar)
+        # 8. Pagination Controls Row
+        page_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(32), spacing=dp(8))
+        self.prev_btn = AnimatedButton(text="◀ Prev", btn_color=BUTTON_BG, size_hint_x=None, width=dp(70), font_size=sp(11))
+        self.prev_btn.bind(on_press=self.prev_page)
+        
+        self.page_lbl = Label(text="Page 1 of 1", font_size=sp(11), color=TEXT_PRIMARY, halign='center', valign='middle')
+        
+        self.next_btn = AnimatedButton(text="Next ▶", btn_color=BUTTON_BG, size_hint_x=None, width=dp(70), font_size=sp(11))
+        self.next_btn.bind(on_press=self.next_page)
+        
+        page_row.add_widget(self.prev_btn)
+        page_row.add_widget(self.page_lbl)
+        page_row.add_widget(self.next_btn)
+        main_layout.add_widget(page_row)
 
-        # Action Buttons Row (Multi-file send vs Whole folder send)
-        btn_actions = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(44), spacing=dp(8))
-        self.send_files_btn = AnimatedButton(text="📤 Send Selected Files", btn_color=ACCENT_PRIMARY, font_size=sp(13))
-        self.send_files_btn.bind(on_press=self.start_multi_file_send)
+        # 9. Transfer Action Buttons Row
+        send_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(42), spacing=dp(8))
+        self.send_selected_btn = AnimatedButton(text="📤 Send Selected (0)", btn_color=ACCENT_PRIMARY, font_size=sp(13))
+        self.send_selected_btn.bind(on_press=self.start_multi_file_send)
         
         self.send_folder_btn = AnimatedButton(text="📦 Send Folder Intact", btn_color=ACCENT_TERTIARY, font_size=sp(13))
         self.send_folder_btn.bind(on_press=self.start_folder_send)
-
-        btn_actions.add_widget(self.send_files_btn)
-        btn_actions.add_widget(self.send_folder_btn)
-        manager_group.add_widget(btn_actions)
-
-        # 4. Clipboard Sync Card
-        clip_group = RoundedCard(orientation='vertical', padding=dp(12), spacing=dp(6), size_hint_y=None, height=dp(110))
-        clip_group.add_widget(Label(text="Clipboard Bridge (Phone \u2192 PC)", font_size=sp(14), bold=True, color=ACCENT_PRIMARY, size_hint_y=None, height=dp(18)))
-
-        self.clip_preview_lbl = Label(text="Tap below to sync phone clipboard to PC", font_size=sp(11), color=TEXT_SECONDARY, halign='center', size_hint_y=None, height=dp(20))
-        self.clip_preview_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', val))
-
-        self.clip_send_btn = AnimatedButton(text="\U0001f4cb Send Clipboard to PC", btn_color=ACCENT_SECONDARY, color=(0.02, 0.10, 0.06, 1), size_hint_y=None, height=dp(38))
-        self.clip_send_btn.bind(on_press=self.send_clipboard_to_pc)
-
-        clip_group.add_widget(self.clip_preview_lbl)
-        clip_group.add_widget(self.clip_send_btn)
-
-        # Scroll wrapper
-        scroll = ScrollView(size_hint=(1, 1))
-        content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None)
-        content.bind(minimum_height=content.setter('height'))
-        content.add_widget(server_group)
-        content.add_widget(manager_group)
-        content.add_widget(clip_group)
-        scroll.add_widget(content)
-
-        layout.add_widget(scroll)
-
-        back_btn = AnimatedButton(text="Back to Home", btn_color=BUTTON_BG, color=(1, 1, 1, 1), size_hint_y=None, height=dp(44))
-        back_btn.bind(on_press=self.go_back)
-        layout.add_widget(back_btn)
         
-        self.add_widget(layout)
+        send_row.add_widget(self.send_selected_btn)
+        send_row.add_widget(self.send_folder_btn)
+        main_layout.add_widget(send_row)
 
-    def on_path_changed(self, instance, new_path):
-        self.cur_path_lbl.text = new_path
+        # 10. Progress bar and status label
+        self.progress_lbl = Label(text="Ready", font_size=sp(11), color=TEXT_SECONDARY, size_hint_y=None, height=dp(18))
+        self.progress_bar = GradientBar(progress=0)
+        main_layout.add_widget(self.progress_lbl)
+        main_layout.add_widget(self.progress_bar)
 
-    def set_browser_path(self, target_path):
-        if os.path.exists(target_path):
-            self.file_chooser.path = target_path
+        # 11. Bottom Back Button
+        back_btn = AnimatedButton(text="Back to Home", btn_color=BUTTON_BG, size_hint_y=None, height=dp(38))
+        back_btn.bind(on_press=self.go_back)
+        main_layout.add_widget(back_btn)
 
-    def go_up_directory(self, instance):
-        cur = self.file_chooser.path
-        parent = os.path.dirname(cur.rstrip("/\\"))
-        if parent and os.path.exists(parent):
-            self.file_chooser.path = parent
+        self.add_widget(main_layout)
 
-    def send_clipboard_to_pc(self, instance):
+    def on_enter(self):
+        self.update_permission_badge()
+        self.load_directory()
+
+    def update_permission_badge(self):
+        has_perm = self.has_full_file_access()
+        if has_perm:
+            self.perm_badge.text = "✅ Full File Access Granted (All folders unlocked)"
+            self.perm_badge.btn_color = BUTTON_BG
+            self.perm_badge.color = SUCCESS
+        else:
+            self.perm_badge.text = "⚠️ Full Access Needed (Android 11+) • Tap to Grant"
+            self.perm_badge.btn_color = (0.35, 0.15, 0.05, 0.8)
+            self.perm_badge.color = WARNING
+
+    def has_full_file_access(self):
         try:
-            from kivy.core.clipboard import Clipboard
-            clip_text = Clipboard.paste()
+            from jnius import autoclass
+            Build = autoclass('android.os.Build$VERSION')
+            if Build.SDK_INT >= 30:
+                Environment = autoclass('android.os.Environment')
+                return bool(Environment.isExternalStorageManager())
+            return True
         except Exception:
-            clip_text = ""
-            
-        if not clip_text:
-            self.clip_preview_lbl.text = "\u26a0\ufe0f Phone clipboard is empty!"
-            return
+            return True
 
-        main_screen = self.manager.get_screen('main')
-        pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
-        if not pc_ip:
-            self.clip_preview_lbl.text = "\u274c PC not linked yet! Please link first."
-            return
-
-        self.clip_preview_lbl.text = f"Sending {len(clip_text)} chars to PC..."
-        threading.Thread(target=self._push_clipboard_thread, args=(pc_ip, clip_text), daemon=True).start()
-
-    def _push_clipboard_thread(self, pc_ip, clip_text):
+    def request_full_storage_permission(self, instance=None):
         try:
-            data = clip_text.encode('utf-8')
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(5.0)
-            s.connect((pc_ip, PORT_TCP_TRANSFER))
-            
-            header = f"FILE_SEND|clipboard.txt|{len(data)}\n"
-            s.sendall(header.encode('utf-8'))
-            time.sleep(0.1)
-            s.sendall(data)
-            s.close()
-            Clock.schedule_once(lambda dt: setattr(self.clip_preview_lbl, 'text', "\u2705 Clipboard synced to PC!"))
+            from jnius import autoclass
+            Build = autoclass('android.os.Build$VERSION')
+            if Build.SDK_INT >= 30:
+                Environment = autoclass('android.os.Environment')
+                if not Environment.isExternalStorageManager():
+                    Intent = autoclass('android.content.Intent')
+                    Settings = autoclass('android.provider.Settings')
+                    Uri = autoclass('android.net.Uri')
+                    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                    intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    uri = Uri.fromParts("package", PythonActivity.mActivity.getPackageName(), None)
+                    intent.setData(uri)
+                    PythonActivity.mActivity.startActivity(intent)
+                    return
         except Exception as e:
-            Clock.schedule_once(lambda dt: setattr(self.clip_preview_lbl, 'text', f"\u274c Transfer error: {e}"))
+            app_log(f"Request full storage error: {e}")
+
+    def open_saf_folder(self, instance=None):
+        try:
+            from jnius import autoclass
+            Intent = autoclass('android.content.Intent')
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            PythonActivity.mActivity.startActivity(intent)
+            self.toggle_options_menu(None)
+        except Exception as e:
+            app_log(f"SAF folder open error: {e}")
+
+    def toggle_options_menu(self, instance):
+        self.menu_expanded = not self.menu_expanded
+        if self.menu_expanded:
+            self.menu_panel.opacity = 1
+            self.menu_panel.height = dp(115)
+            self.options_btn.text = "✕ Close"
+        else:
+            self.menu_panel.opacity = 0
+            self.menu_panel.height = 0
+            self.options_btn.text = "⋮ Menu"
+
+    def set_path(self, path):
+        if os.path.exists(path):
+            self.current_path = path
+            self.page = 1
+            self.load_directory()
+
+    def go_up(self, instance=None):
+        parent = os.path.dirname(self.current_path.rstrip("/\\"))
+        if parent and os.path.exists(parent):
+            self.current_path = parent
+            self.page = 1
+            self.load_directory()
+
+    def load_directory(self):
+        self.path_lbl.text = self.current_path
+        self.current_items = []
+        try:
+            dirs = []
+            files = []
+            with os.scandir(self.current_path) as it:
+                for entry in it:
+                    if entry.name.startswith("."):
+                        continue
+                    try:
+                        is_d = entry.is_dir(follow_symlinks=False)
+                        sz = entry.stat().st_size if not is_d else 0
+                        item = {"name": entry.name, "path": entry.path, "is_dir": is_d, "size": sz}
+                        if is_d:
+                            dirs.append(item)
+                        else:
+                            files.append(item)
+                    except OSError:
+                        pass
+            dirs.sort(key=lambda x: x["name"].lower())
+            files.sort(key=lambda x: x["name"].lower())
+            self.current_items = dirs + files
+        except Exception as e:
+            app_log(f"Directory list error: {e}")
+            self.current_items = []
+
+        total_pages = max(1, (len(self.current_items) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        if self.page > total_pages:
+            self.page = total_pages
+        self.render_page()
+
+    def render_page(self):
+        self.items_container.clear_widgets()
+        total_items = len(self.current_items)
+        total_pages = max(1, (total_items + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        self.page_lbl.text = f"Page {self.page}/{total_pages} ({total_items} items)"
+        
+        self.prev_btn.disabled = (self.page <= 1)
+        self.next_btn.disabled = (self.page >= total_pages)
+
+        start_idx = (self.page - 1) * self.PAGE_SIZE
+        page_items = self.current_items[start_idx:start_idx + self.PAGE_SIZE]
+
+        if not page_items:
+            empty_row = Label(text="This folder is empty.", font_size=sp(12), color=TEXT_SECONDARY)
+            self.items_container.add_widget(empty_row)
+            return
+
+        for item in page_items:
+            is_dir = item["is_dir"]
+            p = item["path"]
+            name = item["name"]
+            sz = item["size"]
+
+            is_sel = p in self.selected_files
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(34), spacing=dp(6))
+            
+            # Icon / Selection box
+            if is_dir:
+                sel_btn = AnimatedButton(text="📁", btn_color=BUTTON_BG, size_hint_x=None, width=dp(36), font_size=sp(13))
+                sel_btn.bind(on_press=lambda inst, path=p: self.set_path(path))
+            else:
+                sel_text = "☑️" if is_sel else "⬜"
+                sel_btn = AnimatedButton(text=sel_text, btn_color=ACCENT_PRIMARY if is_sel else CARD_BG, size_hint_x=None, width=dp(36), font_size=sp(12))
+                sel_btn.bind(on_press=lambda inst, path=p: self.toggle_file_selection(path))
+
+            # Name button / label
+            name_btn = AnimatedButton(
+                text=name[:35] + ("..." if len(name) > 35 else ""),
+                btn_color=BUTTON_BG if not is_sel else (0.1, 0.35, 0.2, 0.8),
+                color=TEXT_PRIMARY,
+                halign='left',
+                font_size=sp(11),
+                size_hint_x=1.0
+            )
+            if is_dir:
+                name_btn.bind(on_press=lambda inst, path=p: self.set_path(path))
+            else:
+                name_btn.bind(on_press=lambda inst, path=p: self.toggle_file_selection(path))
+
+            # Size label
+            sz_str = "--" if is_dir else f"{sz // (1024*1024)}M" if sz >= 1024*1024 else f"{sz // 1024}K"
+            sz_lbl = Label(text=sz_str, font_size=sp(10), color=TEXT_SECONDARY, size_hint_x=None, width=dp(45), halign='right', valign='middle')
+
+            row.add_widget(sel_btn)
+            row.add_widget(name_btn)
+            row.add_widget(sz_lbl)
+            self.items_container.add_widget(row)
+
+    def prev_page(self, instance):
+        if self.page > 1:
+            self.page -= 1
+            self.render_page()
+
+    def next_page(self, instance):
+        total_pages = max(1, (len(self.current_items) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        if self.page < total_pages:
+            self.page += 1
+            self.render_page()
+
+    def toggle_file_selection(self, path):
+        if path in self.selected_files:
+            self.selected_files.remove(path)
+        else:
+            self.selected_files.add(path)
+        self.send_selected_btn.text = f"📤 Send Selected ({len(self.selected_files)})"
+        self.render_page()
+
+    def select_all_page(self, instance):
+        start_idx = (self.page - 1) * self.PAGE_SIZE
+        page_items = self.current_items[start_idx:start_idx + self.PAGE_SIZE]
+        for it in page_items:
+            if not it["is_dir"]:
+                self.selected_files.add(it["path"])
+        self.send_selected_btn.text = f"📤 Send Selected ({len(self.selected_files)})"
+        self.render_page()
+
+    def clear_selection(self, instance):
+        self.selected_files.clear()
+        self.send_selected_btn.text = "📤 Send Selected (0)"
+        self.render_page()
 
     def go_back(self, instance):
         self.manager.current = 'main'
 
     def start_multi_file_send(self, instance):
-        """Send all selected files sequentially to PC."""
-        selection = getattr(self.file_chooser, 'selection', [])
-        if not selection:
-            self.send_progress_lbl.text = "Please tap and select file(s) first!"
-            return
-
-        # Filter out directories if any are in selection
-        files_to_send = [f for f in selection if os.path.isfile(f)]
-        if not files_to_send:
-            self.send_progress_lbl.text = "No valid files selected! Use 'Send Folder' for folders."
+        if not self.selected_files:
+            self.progress_lbl.text = "Please tap and select at least one file first!"
             return
 
         main_screen = self.manager.get_screen('main')
         pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
         if not pc_ip:
-            self.send_progress_lbl.text = "No discovered PC IP! Link device first."
+            self.progress_lbl.text = "No linked PC found! Tap 'TAP TO LINK' on Home first."
             return
 
-        self.send_files_btn.disabled = True
+        files_to_send = list(self.selected_files)
+        self.send_selected_btn.disabled = True
         self.send_folder_btn.disabled = True
 
         def _task():
@@ -1011,7 +1395,7 @@ class FileTransferScreen(Screen):
             for idx, filepath in enumerate(files_to_send):
                 filename = os.path.basename(filepath)
                 Clock.schedule_once(lambda dt, fn=filename, i=idx+1, t=total: setattr(
-                    self.send_progress_lbl, 'text', f"Sending [{i}/{t}]: '{fn}'..."
+                    self.progress_lbl, 'text', f"Sending [{i}/{t}]: {fn}..."
                 ))
                 ok = self._stream_single_file(pc_ip, filepath, filename)
                 if ok:
@@ -1031,10 +1415,7 @@ class FileTransferScreen(Screen):
             sock.sendall(header.encode('utf-8'))
 
             sent_bytes = 0
-            start_time = time.time()
-            last_progress_time = start_time
-            last_bytes = 0
-
+            last_time = time.time()
             with open(filepath, "rb") as f:
                 while sent_bytes < filesize:
                     chunk = f.read(65536)
@@ -1042,18 +1423,11 @@ class FileTransferScreen(Screen):
                         break
                     sock.sendall(chunk)
                     sent_bytes += len(chunk)
-
                     now = time.time()
-                    if now - last_progress_time >= 0.5:
-                        dt = now - last_progress_time
-                        delta = sent_bytes - last_bytes
-                        speed = (delta / dt) / (1024 * 1024) if dt > 0 else 0
-                        percent = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
-                        eta = (filesize - sent_bytes) / (delta / dt) if delta > 0 else 0
-
-                        Clock.schedule_once(lambda dt, p=percent, s=speed, e=eta, fn=filename: self.update_send_ui(p, s, e, fn))
-                        last_bytes = sent_bytes
-                        last_progress_time = now
+                    if now - last_time >= 0.5:
+                        pct = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
+                        Clock.schedule_once(lambda dt, p=pct, fn=filename: self.update_send_progress(p, fn))
+                        last_time = now
 
             sock.close()
             return True
@@ -1066,23 +1440,22 @@ class FileTransferScreen(Screen):
             return False
 
     def start_folder_send(self, instance):
-        """Archive current folder into a zip and stream as FOLDER_SEND to PC."""
-        folder_path = self.file_chooser.path
-        if not os.path.isdir(folder_path):
-            self.send_progress_lbl.text = "Current path is not a directory!"
+        if not os.path.isdir(self.current_path):
+            self.progress_lbl.text = "Current path is not a valid folder!"
             return
 
-        folder_name = os.path.basename(folder_path.rstrip("/\\")) or "Phone_Storage"
-
+        folder_name = os.path.basename(self.current_path.rstrip("/\\")) or "Phone_Storage"
         main_screen = self.manager.get_screen('main')
         pc_ip = getattr(main_screen, 'discovered_pc_ip', None)
         if not pc_ip:
-            self.send_progress_lbl.text = "No discovered PC IP! Link device first."
+            self.progress_lbl.text = "No linked PC found! Link PC on Home screen first."
             return
 
-        self.send_files_btn.disabled = True
+        self.send_selected_btn.disabled = True
         self.send_folder_btn.disabled = True
-        self.send_progress_lbl.text = f"Packaging '{folder_name}' intact..."
+        self.progress_lbl.text = f"Packaging '{folder_name}' intact into archive..."
+
+        folder_path = self.current_path
 
         def _task():
             import zipfile
@@ -1099,7 +1472,7 @@ class FileTransferScreen(Screen):
                                 pass
 
                 filesize = os.path.getsize(temp_zip)
-                Clock.schedule_once(lambda dt: setattr(self.send_progress_lbl, 'text', f"Streaming folder '{folder_name}' ({filesize // (1024*1024)} MB)..."))
+                Clock.schedule_once(lambda dt: setattr(self.progress_lbl, 'text', f"Streaming folder '{folder_name}' ({filesize // (1024*1024)} MB)..."))
 
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(30.0)
@@ -1108,10 +1481,7 @@ class FileTransferScreen(Screen):
                 sock.sendall(header.encode('utf-8'))
 
                 sent_bytes = 0
-                start_time = time.time()
-                last_progress_time = start_time
-                last_bytes = 0
-
+                last_time = time.time()
                 with open(temp_zip, "rb") as f:
                     while sent_bytes < filesize:
                         chunk = f.read(65536)
@@ -1119,26 +1489,18 @@ class FileTransferScreen(Screen):
                             break
                         sock.sendall(chunk)
                         sent_bytes += len(chunk)
-
                         now = time.time()
-                        if now - last_progress_time >= 0.5:
-                            dt = now - last_progress_time
-                            delta = sent_bytes - last_bytes
-                            speed = (delta / dt) / (1024 * 1024) if dt > 0 else 0
-                            percent = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
-                            eta = (filesize - sent_bytes) / (delta / dt) if delta > 0 else 0
-
-                            Clock.schedule_once(lambda dt, p=percent, s=speed, e=eta, fn=folder_name: self.update_send_ui(p, s, e, f"Folder: {fn}"))
-                            last_bytes = sent_bytes
-                            last_progress_time = now
+                        if now - last_time >= 0.5:
+                            pct = int((sent_bytes / filesize) * 100) if filesize > 0 else 0
+                            Clock.schedule_once(lambda dt, p=pct, fn=folder_name: self.update_send_progress(p, f"Folder: {fn}"))
+                            last_time = now
 
                 sock.close()
                 try:
                     os.remove(temp_zip)
                 except OSError:
                     pass
-                Clock.schedule_once(lambda dt: self.on_folder_complete(True, f"Folder '{folder_name}' sent & unpacked on PC!"))
-
+                Clock.schedule_once(lambda dt: self.on_folder_complete(True, f"Folder '{folder_name}' sent intact to PC!"))
             except Exception as e:
                 try:
                     if os.path.exists(temp_zip):
@@ -1149,37 +1511,33 @@ class FileTransferScreen(Screen):
 
         threading.Thread(target=_task, daemon=True).start()
 
-    def update_send_ui(self, percent, speed, eta, name=""):
-        self.send_bar.progress = percent
-        self.send_progress_lbl.text = f"Sending '{name}' | {percent}% | {speed:.1f} MB/s | ETA: {int(eta)}s"
+    def update_send_progress(self, percent, name=""):
+        self.progress_bar.progress = percent
+        self.progress_lbl.text = f"Sending '{name}' | {percent}%"
 
     def on_batch_complete(self, success_count, total):
-        self.send_files_btn.disabled = False
+        self.send_selected_btn.disabled = False
         self.send_folder_btn.disabled = False
-        self.send_bar.progress = 100 if success_count == total else 50
-        self.send_progress_lbl.text = f"Finished: {success_count}/{total} files sent successfully!"
+        self.progress_bar.progress = 100 if success_count == total else 50
+        self.progress_lbl.text = f"Finished: {success_count}/{total} files sent successfully!"
+        self.selected_files.clear()
+        self.send_selected_btn.text = "📤 Send Selected (0)"
+        self.render_page()
 
     def on_folder_complete(self, success, msg):
-        self.send_files_btn.disabled = False
+        self.send_selected_btn.disabled = False
         self.send_folder_btn.disabled = False
-        self.send_bar.progress = 100 if success else 0
-        self.send_progress_lbl.text = msg
+        self.progress_bar.progress = 100 if success else 0
+        self.progress_lbl.text = msg
 
     def update_progress_from_server(self, percent, speed, eta, filename):
         def _update(dt):
-            self.serv_file_lbl.text = f"Receiving: '{filename}'"
-            self.serv_progress_lbl.text = f"{percent}%"
-            self.serv_progress.progress = percent
-            self.serv_stats.text = f"Speed: {speed:.1f} MB/s  |  ETA: {int(eta)}s"
+            self.serv_status_lbl.text = f"Receiving '{filename}' ({percent}%) @ {speed:.1f} MB/s"
         Clock.schedule_once(_update)
 
     def on_server_transfer_complete(self, success, details):
         def _update(dt):
-            if success:
-                self.serv_progress_lbl.text = "100%"
-                self.serv_progress.progress = 100
-            self.serv_file_lbl.text = f"Success: {details}" if success else f"Failed: {details}"
-            self.serv_stats.text = "Done" if success else "Stopped"
+            self.serv_status_lbl.text = f"Transfer {'Done: ' + details if success else 'Failed: ' + details}"
         Clock.schedule_once(_update)
 
 
@@ -1314,7 +1672,7 @@ class SettingsScreen(Screen):
         card.add_widget(fit_box)
 
         # ── Version Badge ────────────────────────────────────────────────
-        ver_lbl = Label(text="CelSuite Mobile • Version v269.16.0", color=ACCENT_SECONDARY, font_size=sp(13), bold=True, halign='center', size_hint_y=None, height=dp(24))
+        ver_lbl = Label(text="CelSuite Mobile • Version v269.17.0", color=ACCENT_SECONDARY, font_size=sp(13), bold=True, halign='center', size_hint_y=None, height=dp(24))
         card.add_widget(ver_lbl)
         
         layout.add_widget(card)
@@ -1385,7 +1743,7 @@ class HelpScreen(Screen):
         content.bind(minimum_height=content.setter('height'))
         
         guide_text = (
-            "[b]CelSuite - Scrcpy Heartbeat v269.16.0[/b]\n\n"
+            "[b]CelSuite - Scrcpy Heartbeat v269.17.0[/b]\n\n"
             "[b]Quick Launch Instructions:[/b]\n"
             "1. Link phone and PC to the same WiFi/hotspot.\n"
             "2. Open the PC PySide6 CelSuite client, then open this app on your phone.\n"
@@ -1514,7 +1872,7 @@ class VaultScreen(Screen):
 
 class HeartbeatApp(App):
     """The main application class for CelS - Scrcpy Heartbeat."""
-    title = "CelS - Scrcpy Heartbeat"
+    title = "Cs. - P2P Screen Mirror"
     icon = "icon_mobile.png"
 
     def build(self):
@@ -1540,6 +1898,7 @@ class HeartbeatApp(App):
 
         self.root_sm = ScreenManager(transition=FadeTransition())
         self.root_sm.add_widget(MainScreen(name='main'))
+        self.root_sm.add_widget(PCMirrorScreen(name='pc_mirror'))
         self.root_sm.add_widget(FileTransferScreen(name='transfer'))
         self.root_sm.add_widget(VaultScreen(name='vault'))
         self.root_sm.add_widget(LogsScreen(name='logs'))

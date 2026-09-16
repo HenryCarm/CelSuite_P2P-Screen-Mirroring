@@ -31,7 +31,7 @@
 
 All desktop executables and mobile packages are built automatically in the cloud via GitHub Actions.
 
-👉 **[Download the Latest Release (v269.16.0)](https://github.com/HenryCarm/CelSuite_P2P-Screen-Mirroring/releases/latest)**
+👉 **[Download the Latest Release (v269.17.0)](https://github.com/HenryCarm/CelSuite_P2P-Screen-Mirroring/releases/latest)**
 
 | Platform | Download Asset | Type | Description |
 | :--- | :--- | :--- | :--- |

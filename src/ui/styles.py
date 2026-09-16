@@ -498,9 +498,9 @@ QListWidget#sidebar {{
 }}
 
 QListWidget#sidebar::item {{
-    padding: 12px 14px;
-    border-radius: 10px;
-    margin: 3px 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 2px 4px;
     font-weight: 600;
     color: {COLORS["text_dim"]};
 }}

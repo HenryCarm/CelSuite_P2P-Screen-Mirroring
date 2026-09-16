@@ -107,7 +107,8 @@ class DiscoveryBroadcaster:
 
         # Cleanup
         try:
-            self._sock.close()
+            if self._sock:
+                self._sock.close()
         except OSError:
             pass
         self._sock = None
