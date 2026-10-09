@@ -1,5 +1,37 @@
 # Changelog
 
+## [269.18.0] - 2026-10-09
+
+### Icons: SVG everywhere, tofu gone
+- New `src/resources/icons/` (30 line-style SVGs) + `src/ui/icons.py` helper.
+- Emoji stripped from desktop labels/buttons/sidebar (tofu on systems
+  without color-emoji fonts); sidebar tabs, hero and action buttons use real
+  SVG `QIcon`s. `PySide6.QtSvg` un-excluded from Nuitka/CI and icons bundled.
+- File-type badges are text (`[VID]`, `[IMG]`, ...) instead of emoji.
+- Android (Kivy has no emoji font either): grid cards + buttons use plain
+  ASCII labels; UI/log emoji removed.
+
+### Control PC vs Mirror PC (unmixed)
+- Old "Mirror PC" tab never showed PC video on the phone (input-only) — now
+  honestly named **Control PC** and runs the input bridge without the dead
+  H.264 encoder (`enable_video=False` + `bind_input_only()`; missing ffmpeg
+  no longer breaks input control).
+- NEW **Mirror PC** tab (`PCScreenTab` + `mirror_server.PCMirrorServer`):
+  real live PC screen on the phone over TCP MJPEG (port 5563, Pillow JPEG,
+  local preview, fps/quality controls, viewer status). Phone "Watch PC"
+  card connects, renders frames, touch-controls the PC via input port.
+- Hold-to-click fixed: phone Left/Right send DOWN on press, UP on release
+  (tap = click, hold = drag/select); PC injector already handled DOWN/UP.
+- Deps: `mss` + `Pillow` added to requirements and CI pip installs.
+
+### Scrcpy docs audit (v5.0.1, every doc page)
+- Central `adb.build_scrcpy_args()` merges preset + quick row + Settings
+  advanced flags; only non-default values are emitted (scrcpy >= 2.0 safe).
+- Settings "Scrcpy Advanced": view-only, gamepad, clipboard autosync,
+  keep-active, show-touches, always-on-top, keyboard/mouse mode, record,
+  push-target, window title, start-app, new display, video buffer, plus
+  List-Apps/Displays/Encoders buttons logging device output.
+
 ## [269.3.1] - 2026-09-03
 
 ### Ecosystem & Rebranding
