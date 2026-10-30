@@ -24,6 +24,7 @@ android.minapi = 26
 android.ndk_api = 26
 android.ndk = 25b
 p4a.branch = v2024.01.21
+android.add_src = android/src/java
 android.accept_sdk_license = True
 android.application = org.kivy.android.ScrcpyApplication
 android.entrypoint = henryjayz.celsuite.scrcpyheartbeat.ScrcpyActivity
