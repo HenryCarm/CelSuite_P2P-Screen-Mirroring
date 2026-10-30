@@ -11,11 +11,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-FILE_PROVIDER_XML = """
-        <!-- FileProvider -->
-        <provider />
-"""
-
 TILE_SERVICE_XML = """
         <!-- Quick Settings Tile for Scrcpy Heartbeat -->
         <service android:name="henryjayz.celsuite.scrcpyheartbeat.ScrcpyTileService"
@@ -35,27 +30,11 @@ def _patch_manifest_file(manifest_path: Path) -> None:
         return
     try:
         content = manifest_path.read_text(encoding="utf-8")
-        changed = False
         if "ScrcpyTileService" not in content and "</application>" in content:
             print(f"[p4a_hook] Injecting ScrcpyTileService into: {manifest_path}")
-            content = content.replace("</application>", f"{TILE_SERVICE_XML}" + chr(10) + "    </application>")
-            changed = True
-        if "fileprovider" not in content.lower() and "</application>" in content:
-            print(f"[p4a_hook] Injecting FileProvider into: {manifest_path}")
-            content = content.replace("</application>", f"{FILE_PROVIDER_XML}" + chr(10) + "    </application>")
-            changed = True
-            try:
-                res_dir = manifest_path.parent / "res" / "xml"
-                res_dir.mkdir(parents=True, exist_ok=True)
-                fp = res_dir / "filepaths.xml"
-                if not fp.exists():
-                    fp.write_text('<?xml version="1.0" encoding="utf-8"?>' + chr(10) + '<paths>' + chr(10) + '    <external-files-path name="vault" path="." />' + chr(10) + '    <external-path name="external" path="." />' + chr(10) + '    <cache-path name="cache" path="." />' + chr(10) + '</paths>' + chr(10), encoding="utf-8")
-                    print(f"[p4a_hook] Wrote {fp}")
-            except Exception as res_err:
-                print(f"[p4a_hook] filepaths.xml note: {res_err}")
-        if changed:
-            manifest_path.write_text(content, encoding="utf-8")
-            print("[p4a_hook] Manifest patched successfully!")
+            new_content = content.replace("</application>", f"{TILE_SERVICE_XML}\n    </application>")
+            manifest_path.write_text(new_content, encoding="utf-8")
+            print(f"[p4a_hook] Successfully injected ScrcpyTileService!")
     except Exception as exc:
         print(f"[p4a_hook] Warning: Failed to patch {manifest_path}: {exc}")
 
